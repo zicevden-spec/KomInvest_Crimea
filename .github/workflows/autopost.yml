@@ -1,0 +1,23 @@
+name: AutoPost KomInvest
+
+on:
+  schedule:
+    - cron: "0 7 * * *"  # 10:00 МСК
+    - cron: "0 12 * * *" # 15:00 МСК
+  workflow_dispatch:
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - run: python main.py
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHANNEL_ID: ${{ secrets.CHANNEL_ID }}
+          CHANNEL_URL: ${{ secrets.CHANNEL_URL }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}

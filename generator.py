@@ -32,7 +32,6 @@ def get_news():
                 title = entry.get("title", "Новость")
                 link = entry.get("link", "")
                 summary = entry.get("summary", "")
-                # Чистим HTML
                 soup = BeautifulSoup(summary, "html.parser")
                 text = soup.get_text()[:300]
                 return title, link, text
@@ -81,19 +80,27 @@ def generate_post():
         Не используй # и *.
         """
 
-    # 2. Пробуем Groq
+    # 2. Пробуем Groq (актуальные модели 2026)
     if groq_client:
-        for m in ["llama-3.1-8b-instant", "mixtral-8x7b-32768"]:
+        for m in ["llama-3.1-8b-instant", "gemma2-9b-it", "mixtral-8x7b-32768"]:
             res = generate_with_ai(groq_client, m, prompt)
             if res: return res
 
-    # 3. Пробуем OpenRouter
+    # 3. Пробуем OpenRouter (запасной)
     if or_client:
         for m in ["google/gemma-2-9b-it:free", "meta-llama/llama-3.1-8b-instruct:free"]:
             res = generate_with_ai(or_client, m, prompt)
             if res: return res
 
-    return "⚠️ AI недоступен. Попробуйте позже."
+    # 4. Фоллбэк: Банк статей (если всё упало)
+    print("ℹ️ AI недоступен. Берем пост из локального банка.")
+    try:
+        import json
+        with open("posts_bank.json", "r", encoding="utf-8") as f:
+            bank = json.load(f)
+        return random.choice(bank)["text"]
+    except:
+        return "⚠️ Все системы временно недоступны. Попробуйте позже."
 
 if __name__ == "__main__":
     print(generate_post())

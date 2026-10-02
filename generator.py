@@ -15,17 +15,29 @@ CHANNEL_URL = os.getenv("CHANNEL_URL")
 groq_client = OpenAI(api_key=GROQ_KEY, base_url="https://api.groq.com/openai/v1") if GROQ_KEY else None
 or_client = OpenAI(api_key=OR_KEY, base_url="https://openrouter.ai/api/v1") if OR_KEY else None
 
-def get_topic_for_hour():
-    """Выбирает тему на основе текущего часа (МСК)"""
+# Типы контента (как в АнтиДолге)
+CONTENT_TYPES = ["советы", "разбор_мифа", "кейс", "объяснение", "статистика"]
+
+TYPE_INSTRUCTIONS = {
+    "советы": "Напиши 3-5 практических советов по теме.",
+    "разбор_мифа": "Напиши пост в формате 'Миф vs Реальность'. Развей популярное заблуждение.",
+    "кейс": "Напиши короткую историю (кейс) из практики инвестора или юриста по этой теме.",
+    "объяснение": "Объясни простыми словами один сложный термин или механизм по теме.",
+    "статистика": "Напиши пост с упором на цифры, тренды и статистику по теме."
+}
+
+def get_topic_and_type():
+    """Выбирает тему и тип контента на основе текущего часа"""
     hour = datetime.now().hour
-    # Находим ближайший слот (9, 12, 15, 18)
     if 5 <= hour < 11: category = "real_estate"
     elif 11 <= hour < 14: category = "finance"
     elif 14 <= hour < 17: category = "legal"
     else: category = "strategy"
     
     topics = ALL_TOPICS.get(category, ALL_TOPICS["real_estate"])
-    return random.choice(topics), category
+    topic = random.choice(topics)
+    content_type = random.choice(CONTENT_TYPES)
+    return topic, content_type, category
 
 def generate_with_ai(client, model, prompt):
     try:
@@ -44,17 +56,19 @@ def generate_with_ai(client, model, prompt):
     return None
 
 def generate_post():
-    topic, category = get_topic_for_hour()
+    topic, content_type, category = get_topic_and_type()
+    instruction = TYPE_INSTRUCTIONS.get(content_type, "Напиши экспертный пост.")
     
     prompt = f"""
     Ты эксперт по коммерческой недвижимости. Напиши пост для Telegram-канала "КомИнвест".
     Тема: {topic}
-    Категория: {category}
+    Тип контента: {content_type}
+    Инструкция: {instruction}
     
     Требования:
     - Объем: 600-900 знаков.
     - Стиль: деловой, экспертный, без воды.
-    - Структура: Цепляющий заголовок -> Суть -> 2-3 инсайта -> Вывод.
+    - Структура: Цепляющий заголовок -> Суть -> Инсайты по инструкции -> Вывод.
     - В конце добавь: "Хотите разобрать вашу ситуацию? Пишите нашему юристу."
     - Не используй символы # и *.
     """
@@ -72,7 +86,6 @@ def generate_post():
             if res: return res
 
     # 3. Фоллбэк: Шаблонный пост (если AI совсем недоступен)
-    # Это НЕ банк статей, а динамическая генерация на основе темы
     print("ℹ️ AI недоступен. Генерируем шаблонный пост.")
     return f"""
 🏢 {topic}

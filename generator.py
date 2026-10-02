@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 import os
 import random
+import feedparser
 import requests
-from duckduckgo_search import DDGS
+from bs4 import BeautifulSoup
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -12,59 +13,65 @@ GROQ_KEY = os.getenv("GROQ_API_KEY")
 OR_KEY = os.getenv("OPENROUTER_API_KEY")
 CHANNEL_URL = os.getenv("CHANNEL_URL")
 
-# Клиенты
 groq_client = OpenAI(api_key=GROQ_KEY, base_url="https://api.groq.com/openai/v1") if GROQ_KEY else None
 or_client = OpenAI(api_key=OR_KEY, base_url="https://openrouter.ai/api/v1") if OR_KEY else None
 
+# RSS источники (РБК Недвижимость, Коммерсантъ)
+RSS_FEEDS = [
+    "https://realty.rbc.ru/rss/news",
+    "https://www.kommersant.ru/rss/theme/12"
+]
+
 def get_news():
-    """Ищет свежую новость про коммерческую недвижимость"""
+    """Парсит RSS и возвращает (заголовок, ссылка, текст)"""
     try:
-        with DDGS() as ddgs:
-            # Ищем новости по Крыму и коммерции
-            results = list(ddgs.news("коммерческая недвижимость Крым инвестиции офис склад", max_results=1))
-            if results:
-                r = results[0]
-                return r.get("title"), r.get("url"), r.get("body", "")[:300]
+        for url in RSS_FEEDS:
+            feed = feedparser.parse(url)
+            if feed.entries:
+                entry = random.choice(feed.entries[:3])
+                title = entry.get("title", "Новость")
+                link = entry.get("link", "")
+                summary = entry.get("summary", "")
+                # Чистим HTML
+                soup = BeautifulSoup(summary, "html.parser")
+                text = soup.get_text()[:300]
+                return title, link, text
     except Exception as e:
-        print(f"News search error: {e}")
+        print(f"RSS Error: {e}")
     return None, None, None
 
-def generate_with_ai(client, model_name, prompt):
+def generate_with_ai(client, model, prompt):
     try:
-        print(f"🔄 Пробуем {model_name}...")
+        print(f"🔄 Пробуем {model}...")
         resp = client.chat.completions.create(
-            model=model_name,
+            model=model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
             max_tokens=800,
             extra_headers={"HTTP-Referer": CHANNEL_URL, "X-Title": "KomInvest"} if "openrouter" in str(client.base_url) else {}
         )
         text = resp.choices[0].message.content.strip()
-        if len(text) > 100 and "не могу" not in text.lower():
-            return text
+        if len(text) > 100: return text
     except Exception as e:
-        print(f"⚠️ {model_name} error: {e}")
+        print(f"⚠️ {model} error: {e}")
     return None
 
 def generate_post():
     # 1. Ищем новость
-    n_title, n_url, n_body = get_news()
+    n_title, n_url, n_text = get_news()
     
     if n_title and n_url:
-        # Режим НОВОСТИ (как в АнтиДолге)
         prompt = f"""
         Ты эксперт по коммерческой недвижимости. Напиши пост для Telegram на основе новости:
         Заголовок: {n_title}
-        Текст: {n_body}
+        Текст: {n_text}
         
         Требования: 600-900 знаков, деловой стиль.
         Структура: Заголовок -> Суть -> Вывод для инвестора.
-        В конце ОБЯЗАТЕЛЬНО добавь строку:
-        🔗 Источник: [{n_title}]({n_url})
+        В конце ОБЯЗАТЕЛЬНО добавь: 🔗 Источник: [{n_title}]({n_url})
         Не используй # и *.
         """
     else:
-        # Режим ЭКСПЕРТНЫЙ ПОСТ
         topics = ["Юридические риски покупки офиса", "Доходность складов vs офисов", "Проверка арендатора", "Ошибки при покупке земли"]
         topic = random.choice(topics)
         prompt = f"""
@@ -74,19 +81,19 @@ def generate_post():
         Не используй # и *.
         """
 
-    # 2. Пробуем Groq (лучшие бесплатные модели из АнтиДолга)
+    # 2. Пробуем Groq
     if groq_client:
-        for m in ["llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it"]:
+        for m in ["llama-3.1-8b-instant", "mixtral-8x7b-32768"]:
             res = generate_with_ai(groq_client, m, prompt)
             if res: return res
 
-    # 3. Пробуем OpenRouter (запасной)
+    # 3. Пробуем OpenRouter
     if or_client:
         for m in ["google/gemma-2-9b-it:free", "meta-llama/llama-3.1-8b-instruct:free"]:
             res = generate_with_ai(or_client, m, prompt)
             if res: return res
 
-    return "⚠️ Все AI-модели временно недоступны. Попробуйте позже."
+    return "⚠️ AI недоступен. Попробуйте позже."
 
 if __name__ == "__main__":
     print(generate_post())

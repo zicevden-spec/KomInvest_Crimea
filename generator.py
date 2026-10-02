@@ -1,62 +1,56 @@
 # -*- coding: utf-8 -*-
+import json
 import os
-from openai import OpenAI
-from dotenv import load_dotenv
+import random
+from datetime import datetime
 
-load_dotenv()
+BANK_FILE = "posts_bank.json"
+HISTORY_FILE = "post_history.json"
 
-API_KEY = os.getenv("OPENROUTER_API_KEY")
+def load_bank():
+    try:
+        with open(BANK_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
 
-client = OpenAI(
-    api_key=API_KEY,
-    base_url="https://openrouter.ai/api/v1"
-)
+def load_history():
+    try:
+        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
 
-# Список бесплатных рабочих моделей на OpenRouter
-WORKING_MODELS = [
-    "google/gemini-2.0-flash-exp:free",
-    "meta-llama/llama-3.1-8b-instruct:free",
-    "qwen/qwen-2.5-7b-instruct:free",
-    "microsoft/phi-3-mini-128k-instruct:free"
-]
+def save_history(history):
+    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+        json.dump(history, f, ensure_ascii=False)
 
 def generate_post():
-    prompt = """
-    Ты — эксперт по коммерческой недвижимости и юрист. 
-    Пишешь пост для Telegram-канала "КомИнвест" (Коммерческая недвижимость Крыма).
+    bank = load_bank()
+    history = load_history()
     
-    Тема поста (выбери одну случайно): 
-    1. Юридические риски при покупке офиса/склада в Крыму.
-    2. Как проверить объект до внесения аванса.
-    3. Доходность коммерческой недвижимости vs жилая.
-    4. Ошибки инвесторов при покупке стрит-ритейла.
+    if not bank:
+        return "⚠️ Банк статей пуст. Добавьте посты в posts_bank.json"
     
-    Требования:
-    - Объем: 600-900 знаков.
-    - Стиль: деловой, спокойный, экспертный, без воды и капса.
-    - Структура: Цепляющий заголовок -> Суть проблемы -> 3 пункта решения/риска -> Вывод.
-    - В конце добавь призыв: "Хотите проверить объект или подобрать вариант? Пишите нашему юристу."
-    - Не используй символы # и *.
-    """
+    # Выбираем пост, который еще не публиковали сегодня
+    today = datetime.now().strftime("%Y-%m-%d")
+    used_topics = {h["topic"] for h in history if h["date"] == today}
     
-    for model in WORKING_MODELS:
-        try:
-            print(f"🔄 Пробуем модель: {model}...")
-            response = client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.7,
-                max_tokens=800,
-                extra_headers={"HTTP-Referer": "https://t.me/KomInvest_Crimea", "X-Title": "KomInvest Bot"}
-            )
-            text = response.choices[0].message.content.strip()
-            print(f"✅ Модель {model} сработала!")
-            return text
-        except Exception as e:
-            print(f"⚠️ Модель {model} недоступна: {e}. Пробуем следующую...")
-            continue
-            
-    return "⚠️ Все модели временно недоступны. Попробуйте позже."
+    available = [p for p in bank if p["topic"] not in used_topics]
+    
+    if not available:
+        # Если все посты на сегодня использованы, берем случайный из банка
+        print("ℹ️ Все посты на сегодня опубликованы. Берем случайный из банка.")
+        available = bank
+    
+    post = random.choice(available)
+    
+    # Сохраняем в историю
+    history.append({"topic": post["topic"], "date": today, "ts": datetime.now().isoformat()})
+    save_history(history)
+    
+    print(f"✅ Выбран пост из банка: {post['topic']}")
+    return post["text"]
 
 if __name__ == "__main__":
     print(generate_post())

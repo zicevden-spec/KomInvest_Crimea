@@ -15,7 +15,7 @@ def send_message(text):
     payload = {
         "chat_id": CHANNEL_ID,
         "text": text,
-        "parse_mode": "Markdown", # Включаем Markdown для красивых ссылок
+        "parse_mode": "Markdown",
         "disable_web_page_preview": True
     }
     try:
@@ -27,13 +27,7 @@ def send_message(text):
         return True
     except Exception as e:
         print(f"❌ Ошибка отправки: {e}")
-        # Если Markdown сломался (например, из-за спецсимволов), пробуем без него
-        try:
-            payload["parse_mode"] = None
-            r = requests.post(url, json=payload, timeout=60)
-            return r.status_code == 200
-        except:
-            return False
+        return False
 
 if __name__ == "__main__":
     if not BOT_TOKEN or not CHANNEL_ID:
@@ -42,8 +36,6 @@ if __name__ == "__main__":
         print("🔄 Генерация поста для КомИнвест...")
         text = generate_post()
         
-        # Футер с Markdown ссылками
-        # Формат: [Текст](URL)
         footer = f"""
 
 ━━━━━━━━━━━━━━━━━━━━

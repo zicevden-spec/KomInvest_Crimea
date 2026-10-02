@@ -15,17 +15,25 @@ def send_message(text):
     payload = {
         "chat_id": CHANNEL_ID,
         "text": text,
+        "parse_mode": "Markdown", # Включаем Markdown для красивых ссылок
         "disable_web_page_preview": True
     }
     try:
-        # Увеличили таймаут до 60 секунд
         r = requests.post(url, json=payload, timeout=60)
         print(f"Telegram API response: {r.status_code}")
+        if r.status_code != 200:
+            print(f"Error details: {r.text}")
         r.raise_for_status()
         return True
     except Exception as e:
         print(f"❌ Ошибка отправки: {e}")
-        return False
+        # Если Markdown сломался (например, из-за спецсимволов), пробуем без него
+        try:
+            payload["parse_mode"] = None
+            r = requests.post(url, json=payload, timeout=60)
+            return r.status_code == 200
+        except:
+            return False
 
 if __name__ == "__main__":
     if not BOT_TOKEN or not CHANNEL_ID:
@@ -34,14 +42,15 @@ if __name__ == "__main__":
         print("🔄 Генерация поста для КомИнвест...")
         text = generate_post()
         
+        # Футер с Markdown ссылками
+        # Формат: [Текст](URL)
         footer = f"""
 
 ━━━━━━━━━━━━━━━━━━━━
-🏢 КомИнвест | Коммерческая недвижимость
-{CHANNEL_URL}
+🏢 [КомИнвест | Коммерческая недвижимость]({CHANNEL_URL})
 
-⚖️ Консультация юриста: @KomInvest_Crimea_bot
-📞 Позвонить / Заказать проверку объекта"""
+⚖️ [Консультация юриста](https://t.me/KomInvest_Crimea_bot)
+📞 [Позвонить / Заказать проверку](https://t.me/KomInvest_Crimea_bot)"""
         
         full_text = text + footer
         

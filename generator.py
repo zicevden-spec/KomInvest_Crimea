@@ -15,19 +15,7 @@ CHANNEL_URL = os.getenv("CHANNEL_URL")
 groq_client = OpenAI(api_key=GROQ_KEY, base_url="https://api.groq.com/openai/v1") if GROQ_KEY else None
 or_client = OpenAI(api_key=OR_KEY, base_url="https://openrouter.ai/api/v1") if OR_KEY else None
 
-# Типы контента (как в АнтиДолге)
-CONTENT_TYPES = ["советы", "разбор_мифа", "кейс", "объяснение", "статистика"]
-
-TYPE_INSTRUCTIONS = {
-    "советы": "Напиши 3-5 практических советов по теме.",
-    "разбор_мифа": "Напиши пост в формате 'Миф vs Реальность'. Развей популярное заблуждение.",
-    "кейс": "Напиши короткую историю (кейс) из практики инвестора или юриста по этой теме.",
-    "объяснение": "Объясни простыми словами один сложный термин или механизм по теме.",
-    "статистика": "Напиши пост с упором на цифры, тренды и статистику по теме."
-}
-
 def get_topic_and_type():
-    """Выбирает тему и тип контента на основе текущего часа"""
     hour = datetime.now().hour
     if 5 <= hour < 11: category = "real_estate"
     elif 11 <= hour < 14: category = "finance"
@@ -36,74 +24,63 @@ def get_topic_and_type():
     
     topics = ALL_TOPICS.get(category, ALL_TOPICS["real_estate"])
     topic = random.choice(topics)
-    content_type = random.choice(CONTENT_TYPES)
-    return topic, content_type, category
-
-def generate_with_ai(client, model, prompt):
-    try:
-        print(f"🔄 Пробуем {model}...")
-        resp = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,
-            max_tokens=800,
-            extra_headers={"HTTP-Referer": CHANNEL_URL, "X-Title": "KomInvest"} if "openrouter" in str(client.base_url) else {}
-        )
-        text = resp.choices[0].message.content.strip()
-        if len(text) > 100: return text
-    except Exception as e:
-        print(f"⚠️ {model} error: {e}")
-    return None
+    types = ["советы", "разбор_мифа", "кейс", "объяснение"]
+    content_type = random.choice(types)
+    return topic, content_type
 
 def generate_post():
-    topic, content_type, category = get_topic_and_type()
-    instruction = TYPE_INSTRUCTIONS.get(content_type, "Напиши экспертный пост.")
+    topic, content_type = get_topic_and_type()
     
     prompt = f"""
-    Ты эксперт по коммерческой недвижимости. Напиши пост для Telegram-канала "КомИнвест".
+    Ты эксперт по коммерческой недвижимости. Напиши пост для Telegram.
     Тема: {topic}
-    Тип контента: {content_type}
-    Инструкция: {instruction}
+    Тип: {content_type}
     
     Требования:
     - Объем: 600-900 знаков.
-    - Стиль: деловой, экспертный, без воды.
-    - Структура: Цепляющий заголовок -> Суть -> Инсайты по инструкции -> Вывод.
-    - В конце добавь: "Хотите разобрать вашу ситуацию? Пишите нашему юристу."
-    - Не используй символы # и *.
+    - Стиль: деловой, экспертный.
+    - Структура: Заголовок -> Суть -> 2-3 инсайта -> Вывод.
+    - В конце: "Хотите разобрать ситуацию? Пишите юристу: @KomInvest_Crimea_bot"
+    - Не используй # и *.
     """
 
     # 1. Пробуем Groq
     if groq_client:
-        for m in ["llama-3.1-8b-instant", "gemma2-9b-it"]:
-            res = generate_with_ai(groq_client, m, prompt)
-            if res: return res
+        try:
+            print("🔄 Пробуем Groq (llama-3.1-8b-instant)...")
+            resp = groq_client.chat.completions.create(
+                model="llama-3.1-8b-instant",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=800
+            )
+            text = resp.choices[0].message.content.strip()
+            if len(text) > 100:
+                print("✅ Groq сработал!")
+                return text
+        except Exception as e:
+            print(f"⚠️ Groq ошибка: {e}")
 
     # 2. Пробуем OpenRouter
     if or_client:
-        for m in ["google/gemma-2-9b-it:free", "meta-llama/llama-3.1-8b-instruct:free"]:
-            res = generate_with_ai(or_client, m, prompt)
-            if res: return res
+        try:
+            print("🔄 Пробуем OpenRouter (gemma-2-9b-it)...")
+            resp = or_client.chat.completions.create(
+                model="google/gemma-2-9b-it",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=800,
+                extra_headers={"HTTP-Referer": CHANNEL_URL, "X-Title": "KomInvest"}
+            )
+            text = resp.choices[0].message.content.strip()
+            if len(text) > 100:
+                print("✅ OpenRouter сработал!")
+                return text
+        except Exception as e:
+            print(f"⚠️ OpenRouter ошибка: {e}")
 
-    # 3. Фоллбэк: Шаблонный пост (если AI совсем недоступен)
-    print("ℹ️ AI недоступен. Генерируем шаблонный пост.")
-    return f"""
-🏢 {topic}
-
-Разбираем ключевые аспекты темы для инвесторов и предпринимателей.
-
-🔹 Важно учитывать текущие рыночные условия и юридические нюансы.
-🔹 Доходность зависит от множества факторов: локация, состояние, арендаторы.
-🔹 Безопасность сделки — приоритет номер один.
-
-Каждый объект требует индивидуального подхода и глубокой проверки.
-
-⚖️ Хотите разобрать вашу ситуацию? Пишите нашему юристу: @KomInvest_Crimea_bot
-
-━━━━━━━━━━━━━━━━━━━━
-🏢 КомИнвест | Коммерческая недвижимость
-{CHANNEL_URL}
-"""
+    # 3. Если всё упало — возвращаем ошибку, а не заглушку!
+    raise Exception("❌ Все AI-модели недоступны. Пост не опубликован.")
 
 if __name__ == "__main__":
     print(generate_post())

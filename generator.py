@@ -3,16 +3,22 @@ import os
 from openai import OpenAI
 from dotenv import load_dotenv
 
-# Эта строка заставляет Python читать файл .env
 load_dotenv()
 
-# Берем ключ из переменной окружения
-API_KEY = os.getenv("GROQ_API_KEY")
+API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 client = OpenAI(
     api_key=API_KEY,
-    base_url="https://api.groq.com/openai/v1"
+    base_url="https://openrouter.ai/api/v1"
 )
+
+# Список бесплатных рабочих моделей на OpenRouter
+WORKING_MODELS = [
+    "google/gemini-2.0-flash-exp:free",
+    "meta-llama/llama-3.1-8b-instruct:free",
+    "qwen/qwen-2.5-7b-instruct:free",
+    "microsoft/phi-3-mini-128k-instruct:free"
+]
 
 def generate_post():
     prompt = """
@@ -33,16 +39,24 @@ def generate_post():
     - Не используй символы # и *.
     """
     
-    try:
-        response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,
-            max_tokens=800
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        return f"⚠️ Ошибка генерации контента: {e}. Проверьте API ключ в настройках."
+    for model in WORKING_MODELS:
+        try:
+            print(f"🔄 Пробуем модель: {model}...")
+            response = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=800,
+                extra_headers={"HTTP-Referer": "https://t.me/KomInvest_Crimea", "X-Title": "KomInvest Bot"}
+            )
+            text = response.choices[0].message.content.strip()
+            print(f"✅ Модель {model} сработала!")
+            return text
+        except Exception as e:
+            print(f"⚠️ Модель {model} недоступна: {e}. Пробуем следующую...")
+            continue
+            
+    return "⚠️ Все модели временно недоступны. Попробуйте позже."
 
 if __name__ == "__main__":
     print(generate_post())

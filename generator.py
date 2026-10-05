@@ -1,14 +1,10 @@
 # -*- coding: utf-8 -*-
 import os
 import random
-import json
-import feedparser
-import requests
-from bs4 import BeautifulSoup
 from datetime import datetime
 from openai import OpenAI
 from dotenv import load_dotenv
-from topics import ALL_TOPICS, SCHEDULE_MAP
+from topics import ALL_TOPICS
 
 load_dotenv()
 
@@ -19,30 +15,15 @@ CHANNEL_URL = os.getenv("CHANNEL_URL")
 groq_client = OpenAI(api_key=GROQ_KEY, base_url="https://api.groq.com/openai/v1") if GROQ_KEY else None
 or_client = OpenAI(api_key=OR_KEY, base_url="https://openrouter.ai/api/v1") if OR_KEY else None
 
-# Типы контента (из АнтиДолга, адаптированы)
-CONTENT_TYPES = ["советы", "кейс", "объяснение", "новость", "статистика", "разбор_мифа"]
+CONTENT_TYPES = ["советы", "кейс", "объяснение", "статистика", "разбор_мифа"]
 
 TYPE_INSTRUCTIONS = {
     "советы": "Напиши 3-5 практических советов для инвестора.",
     "кейс": "Напиши короткую историю (кейс) из практики покупки коммерческой недвижимости.",
     "объяснение": "Объясни простыми словами один сложный термин или механизм.",
-    "новость": "Напиши пост на основе предоставленной новости. В конце ОБЯЗАТЕЛЬНО добавь: 🔗 Источник: [Заголовок](Ссылка).",
     "статистика": "Напиши пост с цифрами, трендами и фактами о рынке.",
     "разбор_мифа": "Напиши в формате: МИФ (популярное заблуждение) и РЕАЛЬНОСТЬ (как на самом деле)."
 }
-
-# RSS источники
-RSS_FEEDS = ["https://realty.rbc.ru/rss/news", "https://www.kommersant.ru/rss/theme/12"]
-
-def get_news():
-    try:
-        for url in RSS_FEEDS:
-            feed = feedparser.parse(url)
-            if feed.entries:
-                entry = random.choice(feed.entries[:3])
-                return entry.get("title"), entry.get("link"), BeautifulSoup(entry.get("summary", ""), "html.parser").get_text()[:300]
-    except: pass
-    return None, None, None
 
 def get_topic_and_type():
     hour = datetime.now().hour
@@ -53,14 +34,7 @@ def get_topic_and_type():
     
     topic = random.choice(ALL_TOPICS.get(category, ALL_TOPICS["real_estate"]))
     ctype = random.choice(CONTENT_TYPES)
-    
-    # Если выпала новость, ищем новость
-    news_title, news_link, news_body = None, None, None
-    if ctype == "новость":
-        news_title, news_link, news_body = get_news()
-        if not news_title: ctype = "советы" # Фоллбэк, если новостей нет
-        
-    return topic, ctype, news_title, news_link, news_body
+    return topic, ctype
 
 def generate_with_ai(client, model, prompt):
     try:
@@ -73,44 +47,55 @@ def generate_with_ai(client, model, prompt):
             extra_headers={"HTTP-Referer": CHANNEL_URL, "X-Title": "KomInvest"} if "openrouter" in str(client.base_url) else {}
         )
         text = resp.choices[0].message.content.strip()
-        if len(text) > 100: return text
+        if len(text) > 200 and "I cannot" not in text and "не могу" not in text.lower():
+            print(f"✅ {model} сработал!")
+            return text
     except Exception as e:
-        print(f"⚠️ {model} error: {e}")
+        print(f"⚠️ {model} ошибка: {e}")
     return None
 
 def generate_post():
-    topic, ctype, n_title, n_link, n_body = get_topic_and_type()
+    topic, ctype = get_topic_and_type()
     instruction = TYPE_INSTRUCTIONS.get(ctype, "Напиши экспертный пост.")
     
-    context = f"Тема: {topic}. Тип: {ctype}. Инструкция: {instruction}"
-    if ctype == "новость" and n_title:
-        context += f"\nНовость: {n_title}\nТекст: {n_body}\nСсылка: {n_link}"
-
     prompt = f"""
     Ты эксперт по коммерческой недвижимости. Напиши пост для Telegram.
-    {context}
+    Тема: {topic}
+    Тип: {ctype}
+    Инструкция: {instruction}
     
     Требования:
     - Объем: 600-900 знаков.
     - Стиль: деловой, экспертный, без воды.
     - Структура: Заголовок -> Суть -> Инсайты -> Вывод.
-    - В конце (если это не новость): "Хотите разобрать ситуацию? Пишите юристу: @KomInvest_Crimea_bot"
-    - Не используй # и *.
+    - В конце: "Хотите разобрать ситуацию? Пишите юристу: @KomInvest_Crimea_bot"
+    - Не используй символы # и *.
+    - Обязательно закончи пост завершённой мыслью.
     """
 
-    # 1. Groq (модели из АнтиДолга)
+    # 1. Groq — актуальные модели 2026 года
     if groq_client:
-        for m in ["llama-3.1-8b-instant", "groq/compound", "mixtral-8x7b-32768"]:
+        for m in [
+            "meta-llama/llama-4-scout-17b-16e-instruct",
+            "qwen/qwen3-32b",
+            "llama-3.3-70b-versatile"
+        ]:
             res = generate_with_ai(groq_client, m, prompt)
             if res: return res
 
-    # 2. OpenRouter (запасной)
+    # 2. OpenRouter — модели, которые работали в АнтиДолге
     if or_client:
-        for m in ["openai/gpt-oss-120b", "google/gemma-2-9b-it:free", "meta-llama/llama-3.1-8b-instruct:free"]:
+        for m in [
+            "openai/gpt-oss-120b",
+            "qwen/qwen3.6-27b",
+            "google/gemini-2.0-flash-exp:free",
+            "meta-llama/llama-3.1-8b-instruct:free"
+        ]:
             res = generate_with_ai(or_client, m, prompt)
             if res: return res
 
-    raise Exception("❌ Все AI-модели недоступны.")
+    # 3. КРИТИЧЕСКАЯ ОШИБКА — никакого фоллбэка на заглушку!
+    raise Exception("❌ Все AI-модели недоступны. Пост НЕ будет опубликован.")
 
 if __name__ == "__main__":
     print(generate_post())

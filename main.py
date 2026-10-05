@@ -20,6 +20,9 @@ NEWS_HISTORY_FILE = "news_history.json"
 MAX_PHOTO_HISTORY = 30
 MAX_NEWS_HISTORY = 100
 
+# Telegram ограничение: caption к фото максимум 1024 символа
+TELEGRAM_CAPTION_LIMIT = 1024
+
 LONG_FOOTER = f"""
 
 ━━━━━━━━━━━━━━━━━━━━
@@ -112,6 +115,29 @@ def send_photo(photo_url, caption):
         print(f"❌ Ошибка фото: {e}")
         return False
 
+def smart_send(text, photo_url=None):
+    """
+    Умная отправка: если есть фото и текст влезает в 1024 символа — отправляем с фото.
+    Если текст слишком длинный — отправляем просто текстом, чтобы не обрезать.
+    """
+    text_len = len(text)
+
+    if photo_url and text_len <= TELEGRAM_CAPTION_LIMIT:
+        print(f"📸 Отправляем С ФОТО (длина {text_len} ≤ {TELEGRAM_CAPTION_LIMIT})")
+        ok = send_photo(photo_url, text)
+        if ok:
+            return True
+        # Если фото не отправилось — фоллбэк на текст
+        print("⚠️ Фото не ушло, фоллбэк на текст")
+        return send_message(text)
+
+    if photo_url:
+        print(f"📝 Пост слишком длинный для фото ({text_len} > {TELEGRAM_CAPTION_LIMIT}), отправляем ТЕКСТОМ без картинки")
+    else:
+        print(f"📝 Отправляем текстом (длина {text_len})")
+
+    return send_message(text)
+
 if __name__ == "__main__":
     post_type, category = get_schedule()
     print(f"📅 Тип: {post_type} | Категория: {category}")
@@ -127,31 +153,22 @@ if __name__ == "__main__":
             print(f"📰 Новость: {news_data['title'][:60]}...")
             text, news_image, news_url = generate_news(news_data)
             full_text = text + NEWS_FOOTER
-            if len(full_text) > 1024:
-                full_text = full_text[:1020] + "…"
 
             news_history.append(news_url)
             save_json(NEWS_HISTORY_FILE, news_history[-MAX_NEWS_HISTORY:])
 
-            if news_image:
-                ok = send_photo(news_image, full_text)
-                if not ok:
-                    ok = send_message(full_text)
-            else:
-                # Картинки нет — ищем по теме новости в Pexels
+            # Если нет картинки в новости — берём из Pexels
+            final_image = news_image
+            if not final_image:
                 query = generate_photo_query(news_data["title"], "news")
                 photo_history = load_json(PHOTO_HISTORY_FILE)
-                pexels_img = get_pexels_image(query, photo_history)
-                if pexels_img:
-                    photo_history.append(pexels_img)
+                final_image = get_pexels_image(query, photo_history)
+                if final_image:
+                    photo_history.append(final_image)
                     save_json(PHOTO_HISTORY_FILE, photo_history[-MAX_PHOTO_HISTORY:])
-                    ok = send_photo(pexels_img, full_text)
-                    if not ok:
-                        ok = send_message(full_text)
-                else:
-                    ok = send_message(full_text)
+
+            ok = smart_send(full_text, final_image)
         else:
-            # Свежих новостей нет — фоллбэк на короткий пост
             print("⚠️ Свежих новостей нет, фоллбэк на короткий пост.")
             post_type = "short"
             category = random.choice(["finance", "strategy", "real_estate"])
@@ -162,7 +179,9 @@ if __name__ == "__main__":
         print(f"📖 Лонгрид: {topic}")
         ctype = random.choice(CONTENT_TYPES)
         text = generate_longread(topic, ctype)
-        ok = send_message(text + LONG_FOOTER)
+        full_text = text + LONG_FOOTER
+        # Лонгрид почти всегда длиннее 1024 → отправится текстом (без фото)
+        ok = smart_send(full_text)
 
     # ====== КОРОТКИЙ ПОСТ ======
     elif post_type == "short":
@@ -170,17 +189,12 @@ if __name__ == "__main__":
         print(f"🖼 Короткий: {topic}")
         text, query = generate_short(topic, category)
         caption = text + SHORT_FOOTER
-        if len(caption) > 1024:
-            caption = caption[:1020] + "…"
         photo_history = load_json(PHOTO_HISTORY_FILE)
         photo_url = get_pexels_image(query, photo_history)
         if photo_url:
             photo_history.append(photo_url)
             save_json(PHOTO_HISTORY_FILE, photo_history[-MAX_PHOTO_HISTORY:])
-            ok = send_photo(photo_url, caption)
-            if not ok:
-                ok = send_message(caption)
-        else:
-            ok = send_message(caption)
+        # Если caption влезает в 1024 — будет с фото, иначе — просто текст
+        ok = smart_send(caption, photo_url)
 
     print("✅ Пост опубликован!" if ok else "❌ Пост НЕ опубликован.")

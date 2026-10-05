@@ -39,7 +39,7 @@ SHORT_FOOTER = f"""
 NEWS_FOOTER = f"""
 
 ━━━━━━━━━━━━━━━━━━━━
-🏢 [КомИнвест | Коммерческая недвижимость]({CHANNEL_URL})"""
+🏢 [КомИнвест | Коммерческая недвижимость]({CHANNEL_URL})" + "\u200B🌊"""
 
 def load_json(path):
     if not os.path.exists(path):

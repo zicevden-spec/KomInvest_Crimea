@@ -90,7 +90,7 @@ def fetch_rss_news(history_urls, max_age_hours=168):
                 continue
             for entry in feed.entries[:10]:  # смотрим последние 10
                 url = entry.get("link")
-                if not url or url in history_urls:
+                if not url or url in history_urls or entry.get("title") in [h.get("title") for h in history_urls if isinstance(h, dict)]:
                     continue
 
                 # Проверка свежести

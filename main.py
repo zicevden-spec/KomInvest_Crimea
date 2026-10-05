@@ -15,9 +15,9 @@ NEWS_HISTORY_FILE = "news_history.json"
 MAX_HISTORY = 50
 TELEGRAM_CAPTION_LIMIT = 1024
 
-LONG_FOOTER = f"\n\n━━━━━━━━━━━━━━━━━━━━\n🏢 [КомИнвест | Коммерческая недвижимость]({CHANNEL_URL})\n\n⚖️ [Консультация юриста](https://t.me/KomInvest_Crimea_bot)\n📞 [Позвонить / Заказать проверку](https://t.me/KomInvest_Crimea_bot)"
-SHORT_FOOTER = f"\n\n🏢 [КомИнвест | Коммерческая недвижимость Крыма]({CHANNEL_URL})"
-NEWS_FOOTER = f"\n\n━━━━━━━━━━━━━━━━━━━━\n🏢 [КомИнвест | Коммерческая недвижимость]({CHANNEL_URL})\n\n⚖️ [Консультация юриста](https://t.me/KomInvest_Crimea_bot)\n📞 [Позвонить / Заказать проверку](https://t.me/KomInvest_Crimea_bot)"
+LONG_FOOTER = f"\n\n━━━━━━━━━━━━━━━━━━━━\n⚖️ [Подобрать недвижимость с юристом](https://t.me/KomInvest_Crimea_bot)\n📞 [Оставить заявку для юриста](https://t.me/KomInvest_Crimea_bot)"
+SHORT_FOOTER = f"\n\n━━━━━━━━━━━━━━━━━━━━\n⚖️ [Подобрать недвижимость с юристом](https://t.me/KomInvest_Crimea_bot)\n📞 [Оставить заявку для юриста](https://t.me/KomInvest_Crimea_bot)"
+NEWS_FOOTER = f"\n🌊\n\n━━━━━━━━━━━━━━━━━━━━\n⚖️ [Подобрать недвижимость с юристом](https://t.me/KomInvest_Crimea_bot)\n📞 [Оставить заявку для юриста](https://t.me/KomInvest_Crimea_bot)"
 
 def load_json(path):
     if not os.path.exists(path): return []

@@ -152,7 +152,7 @@ if __name__ == "__main__":
 
         if news_data:
             print(f"📰 Новость: {news_data['title'][:60]}...")
-            text, news_image, news_url = generate_news(news_data)
+            text, news_image = generate_news(news_data)
             full_text = text + NEWS_FOOTER
 
             news_history.append(news_data["title"])

@@ -247,7 +247,7 @@ def call_ai(prompt):
                 max_tokens=1600,
                 extra_headers={"HTTP-Referer": CHANNEL_URL, "X-Title": "KomInvest"}
             )
-            text = resp.choices[0].message.content.strip()
+            text = (resp.choices[0].message.content or '').strip()
             if len(text) > 200 and "I cannot" not in text and "не могу" not in text.lower():
                 print(f"✅ {model} сработал!")
                 return text

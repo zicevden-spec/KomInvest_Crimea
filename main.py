@@ -5,8 +5,9 @@ import json
 import requests
 from dotenv import load_dotenv
 from generator import (get_schedule, pick_topic, generate_longread,
-                       generate_short, generate_news, fetch_rss_news,
+                       generate_short, generate_news,
                        generate_photo_query, CONTENT_TYPES)
+from rss_news import fetch_rss_news
 
 load_dotenv()
 
@@ -154,7 +155,7 @@ if __name__ == "__main__":
             text, news_image, news_url = generate_news(news_data)
             full_text = text + NEWS_FOOTER
 
-            news_history.append(news_url)
+            news_history.append(news_data["title"])
             save_json(NEWS_HISTORY_FILE, news_history[-MAX_NEWS_HISTORY:])
 
             # Если нет картинки в новости — берём из Pexels

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import os, random, requests, feedparser, time, json
+import os, random, requests, feedparser, time
 from datetime import datetime, timezone, timedelta
 from openai import OpenAI
 from bs4 import BeautifulSoup
@@ -24,8 +24,8 @@ TYPE_INSTRUCTIONS = {
     "разбор_мифа": "Напиши в формате: МИФ и РЕАЛЬНОСТЬ."
 }
 
-CATEGORY_BY_HOUR = {10: "real_estate", 12: "finance", 14: "news", 16: "legal", 18: "strategy", 20: "news"}
-POST_TYPE_BY_HOUR = {10: "longread", 12: "short", 14: "news", 16: "longread", 18: "short", 20: "news"}
+# 4 коротких RSS + 2 лонгрида (обед и вечер)
+POST_TYPE_BY_HOUR = {10: "news", 12: "news", 14: "longread", 16: "news", 18: "news", 20: "longread"}
 
 RSS_FEEDS = [
     ("https://cre.ru/rss/rss_news.xml", "CRE.ru"),
@@ -43,13 +43,19 @@ PHOTO_OBJECTS = {
 }
 
 def get_schedule():
-    hour = datetime.now(MSK).hour
+    now = datetime.now(MSK)
+    hour = now.hour
+    day = now.day
     force = os.getenv("FORCE_POST_TYPE", "")
-    if force in ("longread", "short", "news"):
-        return force, CATEGORY_BY_HOUR.get(hour, "real_estate")
-    if hour in POST_TYPE_BY_HOUR:
-        return POST_TYPE_BY_HOUR[hour], CATEGORY_BY_HOUR[hour]
-    return "short", "finance"
+    ptype = force if force in ("longread", "news") else POST_TYPE_BY_HOUR.get(hour, "news")
+    if ptype == "longread":
+        if hour < 17:
+            cat = ["real_estate", "legal"][day % 2]
+        else:
+            cat = ["finance", "strategy"][day % 2]
+    else:
+        cat = "news"
+    return ptype, cat
 
 def pick_topic(category):
     return random.choice(ALL_TOPICS.get(category, ALL_TOPICS["real_estate"]))
@@ -72,7 +78,6 @@ def fetch_rss_news(history_titles, max_age_hours=168):
                 title = entry.get("title", "").strip()
                 url = entry.get("link", "").strip()
                 if not title or not url or title in history_titles: continue
-                
                 published = None
                 for attr in ("published_parsed", "updated_parsed"):
                     st = getattr(entry, attr, None)
@@ -80,7 +85,6 @@ def fetch_rss_news(history_titles, max_age_hours=168):
                         published = datetime.fromtimestamp(time.mktime(st), tz=timezone.utc)
                         break
                 if published and (now - published).total_seconds() / 3600 > max_age_hours: continue
-
                 image_url = None
                 mc = getattr(entry, "media_content", None)
                 if mc: image_url = mc[0].get("url")
@@ -88,19 +92,16 @@ def fetch_rss_news(history_titles, max_age_hours=168):
                     soup = BeautifulSoup(entry.get("summary", "") or entry.get("description", ""), "html.parser")
                     img = soup.find("img")
                     if img and img.get("src"): image_url = img["src"]
-
                 soup = BeautifulSoup(entry.get("summary", "") or entry.get("description", ""), "html.parser")
                 body = soup.get_text(separator=" ", strip=True)[:800]
                 candidates.append({"title": title, "url": url, "body": body, "image": image_url, "source": source_name, "published": published})
         except Exception as e:
             print(f"Ошибка ленты {source_name}: {e}")
-    
     if not candidates: return None
     candidates.sort(key=lambda x: x["published"] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
     return random.choice(candidates[:min(5, len(candidates))])
 
 def clean_ai_text(text):
-    """Удаляет из текста AI любые мусорные призывы, @упоминания и ссылки"""
     lines = text.split('\n')
     cleaned = []
     for line in lines:
@@ -112,10 +113,8 @@ def clean_ai_text(text):
         ]):
             continue
         cleaned.append(line)
-    
     while cleaned and not cleaned[-1].strip():
         cleaned.pop()
-    
     return '\n'.join(cleaned)
 
 LONGREAD_PROMPT = """
@@ -126,32 +125,24 @@ LONGREAD_PROMPT = """
 ЗАПРЕЩЕНО добавлять призывы, @упоминания и ссылки в конце поста. Пост заканчивается на выводе.
 """
 
-SHORT_PROMPT = """
-Ты — маркетолог по коммерческой недвижимости Крыма. Напиши КОРОТКИЙ пост на тему: {topic}
-Формат: Жирный хук с эмодзи -> Продающий абзац (жирная выгода) -> 3 буллета с подзаголовками -> Мини-кейс (1 предложение)
-Правила: 650-850 знаков, жирный ТОЛЬКО через *звёздочки*, без # и _.
-ЗАПРЕЩЕНО добавлять призывы, @упоминания и ссылки в конце поста. Пост заканчивается на мини-кейсе.
-"""
-
 NEWS_PROMPT = """
-Ты — главный редактор канала "КомИнвест". Напиши ОРИГИНАЛЬНЫЙ экспертный пост по рыночному инфоповоду.
+Ты — главный редактор канала "КомИнвест". Напиши КОРОТКИЙ экспертный пост по рыночному инфоповоду.
 Инфоповод: {title}
 Факты: {body}
 
 СТРОГИЙ ФОРМАТ:
-1) Жирный заголовок с эмодзи (до 60 знаков):
+1) Жирный заголовок с эмодзи (до 50 знаков):
 *📈 Заголовок-инсайт*
 2) Пустая строка.
-3) Суть: 2-3 предложения своими словами. Не пиши "по данным новостей".
+3) Суть своими словами: 2 предложения. Не пиши "по данным новостей" и не упоминай источники.
 4) Пустая строка.
-5) Что это значит для инвестора (2 пункта):
-💡 *Возможность.* Как это использовать.
-⚠️ *Риск.* На что обратить внимание.
-6) Пустая строка.
-7) Экспертный вывод (1-2 предложения).
+5) Один пункт для инвестора:
+💡 *Вывод для инвестора.* Одно-два предложения с практической пользой.
 
-Правила: 700-1000 знаков, жирный ТОЛЬКО через *звёздочки*, никаких ссылок на источники.
-ВАЖНО: Пост ДОЛЖЕН заканчиваться экспертным выводом. ЗАПРЕЩЕНО добавлять в конце: призывы, @упоминания бота, ссылки t.me, фразы типа "пишите юристу", "обсудим вашу ситуацию" и подобные. Никаких CTA — футер добавляется отдельно системой.
+Правила:
+- СТРОГО 450-700 знаков. Это критично: пост публикуется с фотографией, подпись к фото ограничена 1024 символами.
+- Жирный ТОЛЬКО через *звёздочки*, без # и _.
+- ЗАПРЕЩЕНО: призывы, @упоминания, ссылки t.me, фразы "пишите юристу", "обсудим". Пост заканчивается на выводе для инвестора.
 """
 
 def call_ai(prompt):
@@ -164,11 +155,8 @@ def call_ai(prompt):
                 extra_headers={"HTTP-Referer": CHANNEL_URL, "X-Title": "KomInvest"}
             )
             text = (resp.choices[0].message.content or "").strip()
-            if len(text) > 200 and "не могу" not in text.lower():
+            if len(text) > 150 and "не могу" not in text.lower():
                 print(f"{model} сработал!")
-                text = text.replace("@KomInvestCrimeabot", "@KomInvest_Crimea_bot")
-                text = text.replace("@KomInvestCrimeaBot", "@KomInvest_Crimea_bot")
-                text = text.replace("@kominvestcrimeabot", "@KomInvest_Crimea_bot")
                 return text
         except Exception as e:
             print(f"{model} ошибка: {e}")
@@ -178,11 +166,6 @@ def generate_longread(topic, ctype):
     text = call_ai(LONGREAD_PROMPT.format(topic=topic, ctype=ctype, instruction=TYPE_INSTRUCTIONS.get(ctype, "")))
     if not text: raise Exception("AI недоступен (лонгрид)")
     return clean_ai_text(text)
-
-def generate_short(topic, category):
-    text = call_ai(SHORT_PROMPT.format(topic=topic))
-    if not text: raise Exception("AI недоступен (короткий)")
-    return clean_ai_text(text).strip(), generate_photo_query(topic, category)
 
 def generate_news(news_data):
     text = call_ai(NEWS_PROMPT.format(title=news_data["title"], body=news_data["body"]))

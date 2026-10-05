@@ -74,7 +74,7 @@ def generate_photo_query(topic, category):
 
 # ============ RSS ФУНКЦИИ ============
 
-def fetch_rss_news(history_urls, max_age_hours=72):
+def fetch_rss_news(history_urls, max_age_hours=168):
     """
     Берёт свежую новость из cre.ru RSS.
     Возвращает (title, url, body_text, image_url, source_name) или None.

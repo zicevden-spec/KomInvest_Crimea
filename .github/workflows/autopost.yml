@@ -2,11 +2,21 @@ name: AutoPost KomInvest
 
 on:
   schedule:
-    - cron: "0 6 * * *"  # 09:00 МСК (Недвижимость)
-    - cron: "0 9 * * *"  # 12:00 МСК (Финансы)
-    - cron: "0 12 * * *" # 15:00 МСК (Юриспруденция)
-    - cron: "0 15 * * *" # 18:00 МСК (Стратегия)
+    - cron: "0 7 * * *"
+    - cron: "0 9 * * *"
+    - cron: "0 13 * * *"
+    - cron: "0 15 * * *"
   workflow_dispatch:
+    inputs:
+      post_type:
+        description: "Тип поста для ручного запуска (longread / short)"
+        required: false
+        default: ""
+        type: choice
+        options:
+          - ""
+          - longread
+          - short
 
 jobs:
   post:
@@ -22,5 +32,6 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           CHANNEL_ID: ${{ secrets.CHANNEL_ID }}
           CHANNEL_URL: ${{ secrets.CHANNEL_URL }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          FORCE_POST_TYPE: ${{ github.event.inputs.post_type }}

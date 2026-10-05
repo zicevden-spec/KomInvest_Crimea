@@ -27,6 +27,15 @@ TYPE_INSTRUCTIONS = {
 CATEGORY_BY_HOUR = {10: "real_estate", 12: "finance", 16: "legal", 18: "strategy"}
 POST_TYPE_BY_HOUR = {10: "longread", 12: "short", 16: "longread", 18: "short"}
 
+# Уникальные прилагательные для разнообразия фото
+PHOTO_STYLES = ["luxury", "aerial view", "minimalist", "modern glass", "night lighting", "sunrise", "architectural detail", "interior design", "exterior"]
+PHOTO_OBJECTS = {
+    "real_estate": ["office building", "business center", "commercial property", "corporate headquarters", "office lobby"],
+    "finance": ["financial chart", "investment portfolio", "gold coins", "calculations documents", "money growth"],
+    "legal": ["legal documents", "contract signing", "court building", "lawyer office", "legal books"],
+    "strategy": ["strategic meeting", "business planning", "whiteboard brainstorming", "team discussion", "business roadmap"]
+}
+
 def get_schedule():
     hour = datetime.now(MSK).hour
     if hour in CATEGORY_BY_HOUR:
@@ -43,6 +52,18 @@ def get_schedule():
 def pick_topic(category):
     return random.choice(ALL_TOPICS.get(category, ALL_TOPICS["real_estate"]))
 
+def generate_photo_query(topic, category):
+    """Создаёт уникальный фото-запрос на основе темы и категории"""
+    obj = random.choice(PHOTO_OBJECTS.get(category, PHOTO_OBJECTS["real_estate"]))
+    style = random.choice(PHOTO_STYLES)
+    # Берём ключевое слово из темы (первые 3-4 слова)
+    topic_words = topic.lower().replace(":", "").replace("?", "").split()[:3]
+    topic_part = " ".join(topic_words) if topic_words else ""
+    # Смешиваем: 50% шанс использовать тему, 50% — только стиль
+    if random.random() < 0.5 and topic_part:
+        return f"{style} {obj}, {topic_part}"
+    return f"{style} {obj}"
+
 LONGREAD_PROMPT = """
 Ты — эксперт по коммерческой недвижимости и редактор делового Telegram-канала "КомИнвест".
 Напиши ЛОНГРИД на тему: {topic}
@@ -54,7 +75,7 @@ LONGREAD_PROMPT = """
 2) Пустая строка.
 3) Абзац сути (2-3 предложения). Ключевой термин выдели жирным через *звёздочки*.
 4) Пустая строка.
-5) Блок инсайтов: 3-5 пунктов, каждый с новой строки, начинается с эмодзи (🔹 ✅ ️ 📊 💡) и жирного подзаголовка:
+5) Блок инсайтов: 3-5 пунктов, каждый с новой строки, начинается с эмодзи (🔹 ✅ ⚠️ 📊 💡) и жирного подзаголовка:
 🔹 *Подзаголовок.* Раскрытие мысли одним-двумя предложениями.
 6) Пустая строка.
 7) Вывод: начни с жирного *Вывод:* и дай 1-2 предложения.
@@ -75,27 +96,29 @@ SHORT_PROMPT = """
 Напиши КОРОТКИЙ продающий пост на тему: {topic}
 
 СТРОГИЙ ФОРМАТ ОТВЕТА:
-1) Первая строка — жирный хук с эмодзи, до 50 знаков:
+1) Первая строка — жирный хук с эмодзи, до 55 знаков:
 *💰 Пример хука*
 2) Пустая строка.
 3) Продающий абзац (2-3 предложения): опиши проблему или возможность, главную выгоду выдели жирным через *звёздочки*.
 4) Пустая строка.
-5) Блок из 2-3 буллетов с жирными подзаголовками:
+5) Блок из 3 буллетов с жирными подзаголовками (каждый даёт конкретную пользу с цифрами или фактами):
 🔹 *Подзаголовок 1.* Короткое раскрытие.
 ✅ *Подзаголовок 2.* Короткое раскрытие.
 📊 *Подзаголовок 3.* Короткое раскрытие.
 6) Пустая строка.
-7) Строка-призыв со ссылкой в markdown:
+7) Короткий мини-кейс (1 предложение): пример из практики или реалистичная ситуация инвестора.
+8) Пустая строка.
+9) Строка-призыв со ссылкой в markdown:
 👉 [Получить консультацию юриста](https://t.me/KomInvest_Crimea_bot)
-8) Последняя служебная строка (не часть поста), описывающая фото по-английски:
-PHOTO: modern office building interior
 
 ПРАВИЛА:
-- Объем поста до строки PHOTO: 500-700 знаков.
+- Объем 650-850 знаков.
 - Тон энергичный и уверенный, без крика и капса.
 - Жирный ТОЛЬКО через *звёздочки*. Символы # и _ не используй.
-- Эмодзи: 3-5 штук.
-- Буллеты должны давать конкретную пользу, а не общие слова.
+- Эмодзи: 4-6 штук.
+- Буллеты должны давать конкретную пользу с цифрами, а не общие слова.
+- Мини-кейс должен быть реалистичным и коротким (1 предложение).
+- Закончи пост завершённой мыслью.
 """
 
 def call_ai(prompt):
@@ -111,7 +134,7 @@ def call_ai(prompt):
                 extra_headers={"HTTP-Referer": CHANNEL_URL, "X-Title": "KomInvest"}
             )
             text = resp.choices[0].message.content.strip()
-            if len(text) > 150 and "I cannot" not in text and "не могу" not in text.lower():
+            if len(text) > 200 and "I cannot" not in text and "не могу" not in text.lower():
                 print(f"✅ {model} сработал!")
                 return text
         except Exception as e:
@@ -125,16 +148,9 @@ def generate_longread(topic, ctype):
         raise Exception("❌ AI недоступен (лонгрид). Пост НЕ опубликован.")
     return text
 
-def generate_short(topic):
+def generate_short(topic, category):
     text = call_ai(SHORT_PROMPT.format(topic=topic))
     if not text:
         raise Exception("❌ AI недоступен (короткий пост). Пост НЕ опубликован.")
-    photo_query = "modern commercial building"
-    clean = []
-    for line in text.splitlines():
-        if line.strip().upper().startswith("PHOTO:"):
-            q = line.strip()[6:].strip()
-            if q: photo_query = q
-        else:
-            clean.append(line)
-    return "\n".join(clean).strip(), photo_query
+    photo_query = generate_photo_query(topic, category)
+    return text.strip(), photo_query

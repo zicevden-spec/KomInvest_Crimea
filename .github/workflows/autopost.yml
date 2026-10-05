@@ -18,7 +18,6 @@ on:
         options:
           - ""
           - longread
-          - short
           - news
 
 jobs:

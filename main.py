@@ -15,9 +15,9 @@ NEWS_HISTORY_FILE = "news_history.json"
 MAX_HISTORY = 50
 TELEGRAM_CAPTION_LIMIT = 1024
 
-LONG_FOOTER = f"\n\n????????????????????\n?? [ￊ￮￬￈￭￢￥￱￲ | ￊ￮￬￬￥￰￷￥￱￪￠￿ ￭￥￤￢￨￦￨￬￮￱￲￼]({CHANNEL_URL})\n\n?? [ￊ￮￭￱￳￫￼￲￠￶￨￿ ￾￰￨￱￲￠](https://t.me/KomInvest_Crimea_bot)\n?? [ￏ￮￧￢￮￭￨￲￼ / ￇ￠￪￠￧￠￲￼ ￯￰￮￢￥￰￪￳](https://t.me/KomInvest_Crimea_bot)"
-SHORT_FOOTER = f"\n\n?? [ￊ￮￬￈￭￢￥￱￲ | ￊ￮￬￬￥￰￷￥￱￪￠￿ ￭￥￤￢￨￦￨￬￮￱￲￼ ￊ￰￻￬￠]({CHANNEL_URL})"
-NEWS_FOOTER = f"\n\n????????????????????\n?? [ￊ￮￬￈￭￢￥￱￲ | ￊ￮￬￬￥￰￷￥￱￪￠￿ ￭￥￤￢￨￦￨￬￮￱￲￼]({CHANNEL_URL})\n\n?? [ￊ￮￭￱￳￫￼￲￠￶￨￿ ￾￰￨￱￲￠](https://t.me/KomInvest_Crimea_bot)\n?? [ￏ￮￧￢￮￭￨￲￼ / ￇ￠￪￠￧￠￲￼ ￯￰￮￢￥￰￪￳](https://t.me/KomInvest_Crimea_bot)"
+LONG_FOOTER = f"\n\n━━━━━━━━━━━━━━━━━━━━\n🏢 [КомИнвест | Коммерческая недвижимость]({CHANNEL_URL})\n\n⚖️ [Консультация юриста](https://t.me/KomInvest_Crimea_bot)\n📞 [Позвонить / Заказать проверку](https://t.me/KomInvest_Crimea_bot)"
+SHORT_FOOTER = f"\n\n🏢 [КомИнвест | Коммерческая недвижимость Крыма]({CHANNEL_URL})"
+NEWS_FOOTER = f"\n\n━━━━━━━━━━━━━━━━━━━━\n🏢 [КомИнвест | Коммерческая недвижимость]({CHANNEL_URL})\n\n⚖️ [Консультация юриста](https://t.me/KomInvest_Crimea_bot)\n📞 [Позвонить / Заказать проверку](https://t.me/KomInvest_Crimea_bot)"
 
 def load_json(path):
     if not os.path.exists(path): return []
@@ -36,9 +36,9 @@ def get_pexels_image(query, history):
             photos = [p for p in r.json().get("photos", []) if p["src"]["large"] not in history]
             if not photos: photos = r.json().get("photos", [])
             if photos:
-                print(f"?? ￔ￮￲￮: {query} (￭￮￢￻￵: {len(photos)})")
+                print(f"🖼 Фото: {query} (новых: {len(photos)})")
                 return random.choice(photos)["src"]["large"]
-    except Exception as e: print(f"?? Pexels ￮￸￨￡￪￠: {e}")
+    except Exception as e: print(f"⚠️ Pexels ошибка: {e}")
     return None
 
 def send_message(text):
@@ -50,7 +50,7 @@ def send_message(text):
         payload.pop("parse_mode")
         return requests.post(url, json=payload, timeout=60).status_code == 200
     except Exception as e:
-        print(f"? ￎ￸￨￡￪￠: {e}"); return False
+        print(f"❌ Ошибка: {e}"); return False
 
 def send_photo(photo_url, caption):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
@@ -61,26 +61,25 @@ def send_photo(photo_url, caption):
         payload.pop("parse_mode")
         return requests.post(url, json=payload, timeout=90).status_code == 200
     except Exception as e:
-        print(f"? ￎ￸￨￡￪￠ ￴￮￲￮: {e}"); return False
+        print(f"❌ Ошибка фото: {e}"); return False
 
 def smart_send(text, photo_url=None):
     if photo_url and len(text) <= TELEGRAM_CAPTION_LIMIT:
-        print(f"?? ￎ￲￯￰￠￢￫￿￥￬ ￑ ￔￎￒￎ (￤￫￨￭￠ {len(text)} ? {TELEGRAM_CAPTION_LIMIT})")
+        print(f"📸 Отправляем С ФОТО (длина {len(text)} <= {TELEGRAM_CAPTION_LIMIT})")
         if send_photo(photo_url, text): return True
-    print(f"?? ￎ￲￯￰￠￢￫￿￥￬ ￒￅￊ￑ￒￎￌ (￤￫￨￭￠ {len(text)})")
+    print(f"📝 Отправляем ТЕКСТОМ (длина {len(text)})")
     return send_message(text)
 
 if __name__ == "__main__":
     post_type, category = get_schedule()
-    print(f"?? ￒ￨￯: {post_type} | ￊ￠￲￥￣￮￰￨￿: {category}")
+    print(f"📅 Тип: {post_type} | Категория: {category}")
     ok = False
 
     if post_type == "news":
         news_history = load_json(NEWS_HISTORY_FILE)
         news_data = fetch_rss_news(news_history)
         if news_data:
-            print(f"?? ￍ￮￢￮￱￲￼: {news_data['title'][:60]}...")
-            # ￈￑ￏ￐￀ￂￋￅￍￎ: ￦￤ﾸ￬ ￰￮￢￭￮ 2 ￧￭￠￷￥￭￨￿
+            print(f"📰 Новость: {news_data['title'][:60]}...")
             text, news_image = generate_news(news_data)
             full_text = text + NEWS_FOOTER
             news_history.append(news_data["title"])
@@ -94,7 +93,7 @@ if __name__ == "__main__":
                 save_json(PHOTO_HISTORY_FILE, photo_history)
             ok = smart_send(full_text, final_image)
         else:
-            print("?? ￑￢￥￦￨￵ ￭￮￢￮￱￲￥￩ ￭￥￲, ￴￮￫￫￡�￪ ￭￠ ￪￮￰￮￲￪￨￩ ￯￮￱￲.")
+            print("⚠️ Свежих новостей нет, фоллбэк на короткий пост.")
             post_type, category = "short", random.choice(["finance", "strategy"])
 
     if post_type == "longread":
@@ -111,4 +110,4 @@ if __name__ == "__main__":
             save_json(PHOTO_HISTORY_FILE, photo_history)
         ok = smart_send(text + SHORT_FOOTER, photo_url)
 
-    print("? ￏ￮￱￲ ￮￯￳￡￫￨￪￮￢￠￭!" if ok else "? ￏ￮￱￲ ￍￅ ￮￯￳￡￫￨￪￮￢￠￭.")
+    print("✅ Пост опубликован!" if ok else "❌ Пост НЕ опубликован.")

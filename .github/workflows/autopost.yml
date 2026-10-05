@@ -4,12 +4,14 @@ on:
   schedule:
     - cron: "0 7 * * *"
     - cron: "0 9 * * *"
+    - cron: "0 11 * * *"
     - cron: "0 13 * * *"
     - cron: "0 15 * * *"
+    - cron: "0 17 * * *"
   workflow_dispatch:
     inputs:
       post_type:
-        description: "Тип поста (longread / short)"
+        description: "Тип поста"
         required: false
         default: ""
         type: choice
@@ -17,6 +19,7 @@ on:
           - ""
           - longread
           - short
+          - news
 
 jobs:
   post:
@@ -39,10 +42,10 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           FORCE_POST_TYPE: ${{ github.event.inputs.post_type }}
-      - name: Commit photo history
+      - name: Commit history
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add photo_history.json
-          git diff --staged --quiet || git commit -m "chore: update photo history [skip ci]"
+          git add photo_history.json news_history.json
+          git diff --staged --quiet || git commit -m "chore: update history [skip ci]"
           git push

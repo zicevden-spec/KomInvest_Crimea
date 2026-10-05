@@ -69,7 +69,7 @@ def generate_with_ai(client, model, prompt):
             model=model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
-            max_tokens=800,
+            max_tokens=1600,
             extra_headers={"HTTP-Referer": CHANNEL_URL, "X-Title": "KomInvest"} if "openrouter" in str(client.base_url) else {}
         )
         text = resp.choices[0].message.content.strip()

@@ -25,6 +25,34 @@ EDIT_FIELDS = {"title": "Заголовок", "desc": "Описание", "price
 
 user_states = {}
 
+LEAD_STATUSES = {
+    "new": "🔥 Новый",
+    "work": "📞 В работе",
+    "done": "✅ Закрыт",
+    "fail": "❌ Отказ",
+    "recall": "🕐 Не дозвон",
+}
+
+def update_leads(leads):
+    gh_store.push("leads.json", leads)
+
+def lead_card_text(l):
+    return (f"👤 {l['name']}\n📞 {l['phone']}\n📍 Источник: {l['source']}\n"
+            f"🕒 Принят: {l['date']}\n"
+            f"📊 Статус: {LEAD_STATUSES.get(l['status'], l['status'])}"
+            + (f"\n🔄 Изменён: {l['status_date']}" if l.get('status_date') else ""))
+
+def lead_kb(l):
+    lid = l["id"]
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📞 В работе", callback_data=f"ls_{lid}_work"),
+         InlineKeyboardButton("✅ Закрыт", callback_data=f"ls_{lid}_done")],
+        [InlineKeyboardButton("❌ Отказ", callback_data=f"ls_{lid}_fail"),
+         InlineKeyboardButton("🕐 Не дозвон", callback_data=f"ls_{lid}_recall")],
+        [InlineKeyboardButton("📱 Позвонить", url=f"tel:{l['phone']}")],
+        [InlineKeyboardButton("⬅️ К лидам", callback_data="adm_leads")],
+    ])
+
 # ---------- Хранилище ----------
 
 def load_leads():
@@ -362,6 +390,27 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text = "\n".join(lines)
             await q.edit_message_text(text, reply_markup=admin_menu(uid))
 
+        elif data.startswith("lc_"):
+            lid = int(data.split("_")[-1])
+            l = next((x for x in load_leads() if x["id"] == lid), None)
+            if not l:
+                await q.edit_message_text("Заявка не найдена.", reply_markup=admin_menu(uid))
+                return
+            await q.edit_message_text(lead_card_text(l), reply_markup=lead_kb(l))
+
+        elif data.startswith("ls_"):
+            _, lid, code = data.split("_")
+            leads = load_leads()
+            l = next((x for x in leads if x["id"] == int(lid)), None)
+            if not l:
+                await q.edit_message_text("Заявка не найдена.", reply_markup=admin_menu(uid))
+                return
+            l["status"] = code
+            l["status_date"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+            update_leads(leads)
+            await q.edit_message_text(f"✅ Заявка #{lid}: {LEAD_STATUSES[code]}",
+                                      reply_markup=lead_kb(l))
+
         elif data == "adm_export":
             import openpyxl
             from openpyxl.styles import Font
@@ -370,10 +419,10 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await q.edit_message_text("Экспортировать нечего.", reply_markup=admin_menu(uid))
                 return
             wb = openpyxl.Workbook(); ws = wb.active; ws.title = "Заявки"
-            ws.append(["№", "Имя", "Телефон", "Источник", "Дата", "Статус"])
+            ws.append(["№", "Имя", "Телефон", "Источник", "Дата", "Статус", "Статус изменён"])
             for cell in ws[1]: cell.font = Font(bold=True)
             for l in leads:
-                ws.append([l["id"], l["name"], l["phone"], l["source"], l["date"], l["status"]])
+                ws.append([l["id"], l["name"], l["phone"], l["source"], l["date"], LEAD_STATUSES.get(l.get("status", "new"), l.get("status", "new")), l.get("status_date", "")])
             buf = io.BytesIO(); wb.save(buf); buf.seek(0)
             await q.message.reply_document(document=buf,
                 filename=f"kominvest_leads_{datetime.now().strftime('%d%m%Y')}.xlsx",
@@ -610,10 +659,10 @@ async def export_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Экспортировать нечего.")
         return
     wb = openpyxl.Workbook(); ws = wb.active; ws.title = "Заявки"
-    ws.append(["№", "Имя", "Телефон", "Источник", "Дата", "Статус"])
+    ws.append(["№", "Имя", "Телефон", "Источник", "Дата", "Статус", "Статус изменён"])
     for cell in ws[1]: cell.font = Font(bold=True)
     for l in leads:
-        ws.append([l["id"], l["name"], l["phone"], l["source"], l["date"], l["status"]])
+        ws.append([l["id"], l["name"], l["phone"], l["source"], l["date"], LEAD_STATUSES.get(l.get("status", "new"), l.get("status", "new")), l.get("status_date", "")])
     buf = io.BytesIO(); wb.save(buf); buf.seek(0)
     await update.message.reply_document(document=buf,
         filename=f"kominvest_leads_{datetime.now().strftime('%d%m%Y')}.xlsx",

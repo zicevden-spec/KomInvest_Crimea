@@ -177,6 +177,9 @@ async def export_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         caption=f"📥 Выгрузка заявок КомИнвест: {len(leads)} шт.")
 
 if __name__ == "__main__":
+    import asyncio
+    from aiohttp import web
+
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("leads", leads_cmd))
@@ -186,12 +189,39 @@ if __name__ == "__main__":
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     if WEBHOOK_URL:
-        print(f"🚀 Webhook mode. URL: {WEBHOOK_URL}")
-        app.run_webhook(
-            listen="0.0.0.0",
-            port=PORT,
-            webhook_url=WEBHOOK_URL,
-        )
+        async def webhook_handler(request):
+            try:
+                data = await request.json()
+            except Exception:
+                return web.Response(status=400, text="bad json")
+            update = Update.de_json(data, app.bot)
+            if update is not None:
+                await app.update_queue.put(update)
+            return web.Response(text="OK")
+
+        async def health_handler(request):
+            return web.Response(text="OK")
+
+        async def main():
+            await app.initialize()
+            await app.start()
+            try:
+                await app.bot.set_webhook(WEBHOOK_URL, allowed_updates=Update.ALL_TYPES)
+                print(f"Webhook зарегистрирован: {WEBHOOK_URL}")
+            except Exception as e:
+                print(f"Не удалось зарегистрировать webhook: {e}")
+            web_app = web.Application()
+            web_app.router.add_post("/", webhook_handler)
+            web_app.router.add_get("/", health_handler)
+            runner = web.AppRunner(web_app)
+            await runner.setup()
+            site = web.TCPSite(runner, "0.0.0.0", PORT)
+            await site.start()
+            print(f"Webhook mode. URL: {WEBHOOK_URL} (GET / отвечает 200 OK)")
+            await asyncio.Event().wait()
+
+        print("Запускаю webhook-сервер...")
+        asyncio.run(main())
     else:
-        print("🤖 Polling mode (локально)...")
+        print("Polling mode (локально)...")
         app.run_polling(allowed_updates=Update.ALL_TYPES)

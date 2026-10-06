@@ -17,5 +17,26 @@
     "created": "2026-10-06 14:42",
     "published": true,
     "cover": "AgACAgIAAxkBAANeasUcK_tKo2op33uhQoR1aWc1snEAAh4jaxthgyhKjWRg1VFOfbMBAAMCAAN5AAM9BA"
+  },
+  {
+    "id": 2,
+    "category": "commercial",
+    "cover": "AgACAgIAAxkBAAOsasUrbzKLeIHzGNJtArjJGnUbCY0AAngjaxthgyhK0ap0LGHiboQBAAMCAAN5AAM9BA",
+    "photos": [
+      "AgACAgIAAxkBAAOuasUrfr_XLqMXN0Otd1APD7Az7u4AAnojaxthgyhKvmV0uSgF90kBAAMCAAN5AAM9BA",
+      "AgACAgIAAxkBAAOvasUrfnxjUPW6IhSzZPi3sL8Y95QAAnsjaxthgyhKUNqMUY67ILABAAMCAAN5AAM9BA",
+      "AgACAgIAAxkBAAOwasUrfmZTMG_D2-cbgh-Zk-0OjZIAAnwjaxthgyhKt3Z1g72tiiEBAAMCAAN5AAM9BA",
+      "AgACAgIAAxkBAAOxasUrfpU3B229qbzxmT-1266HrWIAAn0jaxthgyhK4ULXyHuRfHkBAAMCAAN5AAM9BA",
+      "AgACAgIAAxkBAAOyasUrfoAN3QXXPFV7nm7Zu6k8TAYAAn4jaxthgyhKPJG-n5wcHoYBAAMCAAN5AAM9BA"
+    ],
+    "title": "АК \"ЭФИРИУМ\"",
+    "description": "Апарт-комплекс бизнес-класса в Алуште.\n\nДва каскадных корпуса на зелёном холме Алушты — с панорамным видом на море из каждой квартиры. Авторская архитектура с зигзаг-террасами, закрытый бассейн с лаунж-зоной и кипарисовой аллеей, дизайнерское лобби с выходом к воде.\n✅ Апартаменты от студий до 3-комнатных, с просторными террасами\n✅ Инфраструктура отеля: бассейн, лаунж, прогулочные зоны\n✅ 5 минут до моря — без дорог и пробок\nФормат: для жизни у моря и для сдачи в сезон — бизнес-класс держит цену круглый год.\n\n«Успей выбрать этаж с видом на закат — пиши в бот, пришлём планировки и цены.»",
+    "price": "от 17 млн.руб.",
+    "location": "Алушта",
+    "area": "от 40 кв/м и до королевских размеров",
+    "type": "другое",
+    "status": "active",
+    "created": "2026-10-06 17:14",
+    "published": false
   }
 ]

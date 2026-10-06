@@ -6,3 +6,5 @@ feedparser==6.0.11
 beautifulsoup4==4.12.3
 openai==1.55.3
 aiohttp==3.10.5
+
+reportlab==4.2.5

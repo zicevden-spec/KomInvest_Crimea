@@ -28,7 +28,7 @@ def fetch_json(name, default):
 
 def main():
     leads = fetch_json("leads.json", [])
-    fresh = [l for l in leads if l.get("status", "new") == "new"]
+    fresh = [l for l in leads if l.get("status", "new") in ("new", "новая", "")]
     if not fresh:
         print("Неотработанных лидов нет — напоминание не отправляем.")
         return

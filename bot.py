@@ -7,6 +7,7 @@ from telegram.ext import (Application, CommandHandler, MessageHandler,
                           CallbackQueryHandler, ContextTypes, filters)
 from dotenv import load_dotenv
 import gh_store
+import catalog
 
 load_dotenv()
 
@@ -295,6 +296,8 @@ def admin_menu(uid):
         [InlineKeyboardButton("📋 Лиды", callback_data="adm_leads")],
         [InlineKeyboardButton("📥 Экспорт в Excel", callback_data="adm_export")],
         [InlineKeyboardButton("🏢 Объекты", callback_data="adm_objects")],
+        [InlineKeyboardButton("📚 Каталог (PDF)", callback_data="adm_catalog")],
+        [InlineKeyboardButton("📚 Каталог (PDF)", callback_data="adm_catalog")],
     ]
     if is_super(uid):
         rows.append([InlineKeyboardButton("👥 Админы", callback_data="adm_admins")])
@@ -506,6 +509,41 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await q.edit_message_text(f"✅ Тип обновлён: {OBJ_TYPES[idx]}",
                                           reply_markup=obj_view_kb(oid))
 
+        elif data == "adm_catalog":
+            await q.edit_message_text("📚 Каталог PDF: что сделать?",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("📥 Получить сюда", callback_data="cat_get")],
+                    [InlineKeyboardButton("📢 В канал + закрепить", callback_data="cat_pub")],
+                    [InlineKeyboardButton("⬅️ В меню", callback_data="adm_back")],
+                ]))
+
+        elif data == "cat_get":
+            await q.edit_message_text("⏳ Собираю каталог...")
+            pdf = await build_catalog_bytes(context)
+            if pdf:
+                await q.message.reply_document(io.BytesIO(pdf),
+                    filename="kominvest_catalog.pdf", caption="📚 Каталог объектов")
+                await q.edit_message_text("📚 Каталог выше.", reply_markup=admin_menu(uid))
+            else:
+                await q.edit_message_text("Нет объектов для каталога.", reply_markup=admin_menu(uid))
+
+        elif data == "cat_pub":
+            await q.edit_message_text("⏳ Собираю и отправляю каталог в канал...")
+            pdf = await build_catalog_bytes(context)
+            if not pdf:
+                await q.edit_message_text("Нет объектов для каталога.", reply_markup=admin_menu(uid))
+            else:
+                msg = await context.bot.send_document(CHANNEL_ID,
+                    document=io.BytesIO(pdf), filename="kominvest_catalog.pdf",
+                    caption=f"📚 Каталог объектов КомИнвест обновлён {datetime.now().strftime('%d.%m.%Y')}")
+                try:
+                    await context.bot.pin_chat_message(CHANNEL_ID, msg.message_id,
+                                                       disable_notification=True)
+                except Exception as e:
+                    print(f"pin error: {e}")
+                await q.edit_message_text("✅ Каталог отправлен в канал и закреплён.",
+                                          reply_markup=admin_menu(uid))
+
         elif data == "adm_admins":
             if not is_super(uid):
                 await q.edit_message_text("❌ Только для супер-админа.")
@@ -578,6 +616,43 @@ async def export_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         filename=f"kominvest_leads_{datetime.now().strftime('%d%m%Y')}.xlsx",
         caption=f"📥 Выгрузка заявок: {len(leads)} шт.")
 
+PHOTO_CACHE = os.path.join("data", "photos")
+
+async def get_photo_bytes(bot, file_id):
+    if not file_id: return None
+    os.makedirs(PHOTO_CACHE, exist_ok=True)
+    path = os.path.join(PHOTO_CACHE, file_id.replace("/", "_") + ".jpg")
+    if os.path.exists(path):
+        with open(path, "rb") as f: return f.read()
+    try:
+        f = await bot.get_file(file_id)
+        data = bytes(await f.download_as_bytearray())
+        with open(path, "wb") as fp: fp.write(data)
+        return data
+    except Exception as e:
+        print(f"photo download error: {e}")
+        return None
+
+async def build_catalog_bytes(context):
+    objs = [dict(o) for o in load_objects() if o.get("category") == "commercial"]
+    if not objs: return None
+    for o in objs:
+        o["_cover_bytes"] = await get_photo_bytes(context.bot, o.get("cover"))
+    return catalog.build_catalog(objs)
+
+async def catalog_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user or not is_admin_uid(update.effective_user.id): return
+    m = await update.message.reply_text("⏳ Собираю каталог...")
+    pdf = await build_catalog_bytes(context)
+    if not pdf:
+        await m.edit_text("Нет объектов для каталога.")
+        return
+    await update.message.reply_document(io.BytesIO(pdf),
+        filename="kominvest_catalog.pdf",
+        caption="📚 Каталог объектов КомИнвест")
+    try: await m.delete()
+    except Exception: pass
+
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     traceback.print_exc()
     try:
@@ -602,6 +677,7 @@ if __name__ == "__main__":
     app.add_handler(MessageHandler(filters.CONTACT, handle_contact))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(CommandHandler("catalog", catalog_cmd))
     app.add_error_handler(error_handler)
 
     if WEBHOOK_URL:

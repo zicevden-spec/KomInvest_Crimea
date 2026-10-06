@@ -70,7 +70,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Помогаем находить доходные объекты, проверять их юридическую чистоту "
         "и безопасно выходить на сделку.\n\n"
         "Нажмите кнопку ниже 👇",
-        reply_markup=main_keyboard())
+        reply_markup=keyboard_for(update.effective_user.id))
 
 async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -79,16 +79,16 @@ async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "✅ Юридическая проверка объекта перед покупкой\n"
         "✅ Сопровождение сделки «под ключ»\n\n"
         "Больше полезного — в нашем канале: " + CHANNEL_URL,
-        reply_markup=main_keyboard())
+        reply_markup=keyboard_for(update.effective_user.id))
 
 async def channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("📰 Подписывайтесь на наш канал:\n" + CHANNEL_URL,
-                                    reply_markup=main_keyboard())
+                                    reply_markup=keyboard_for(update.effective_user.id))
 
 async def lead_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_states[update.effective_user.id] = "name"
     await update.message.reply_text("Отлично! 🙌\nКак к вам обращаться?",
-                                    reply_markup=main_keyboard())
+                                    reply_markup=keyboard_for(update.effective_user.id))
 
 async def finish_lead(update: Update, context: ContextTypes.DEFAULT_TYPE, phone: str):
     uid = update.effective_user.id
@@ -102,7 +102,7 @@ async def finish_lead(update: Update, context: ContextTypes.DEFAULT_TYPE, phone:
     await update.message.reply_text(
         f"Спасибо, {name}! ✅\n\nВаша заявка принята. Юрист свяжется с вами "
         "в ближайшее время.\n\nА пока — загляните в наш канал:\n" + CHANNEL_URL,
-        reply_markup=main_keyboard())
+        reply_markup=keyboard_for(update.effective_user.id))
     try:
         await context.bot.send_message(ADMIN_ID,
             f"🔥 НОВАЯ ЗАЯВКА #{lead['id']}\n\n👤 {name}\n📞 {phone}\n"
@@ -144,7 +144,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     st = user_states.get(uid)
     if not (isinstance(st, dict) and is_admin_uid(uid)):
-        await update.message.reply_text("Сейчас не жду фото 😅", reply_markup=main_keyboard())
+        await update.message.reply_text("Сейчас не жду фото 😅", reply_markup=keyboard_for(update.effective_user.id))
         return
     step = st.get("step")
     fid = update.message.photo[-1].file_id
@@ -171,7 +171,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_states.pop(uid, None)
         await update.message.reply_text("✅ Обложка заменена!", reply_markup=obj_view_kb(st["oid"]))
     else:
-        await update.message.reply_text("Сейчас не жду фото 😅", reply_markup=main_keyboard())
+        await update.message.reply_text("Сейчас не жду фото 😅", reply_markup=keyboard_for(update.effective_user.id))
 
 # ---------- Текст ----------
 
@@ -231,7 +231,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             target = (await context.bot.get_chat(text)).id if text.startswith("@") else int(text)
         except Exception:
             await update.message.reply_text("Не распознал. Пришли числовой ID или @username.",
-                                            reply_markup=main_keyboard())
+                                            reply_markup=keyboard_for(update.effective_user.id))
             return
         d = load_admins()
         if step == "add_admin":
@@ -251,6 +251,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await lead_start(update, context)
     if text == "ℹ️ О компании": return await about(update, context)
     if text == "📰 Наш канал": return await channel(update, context)
+    if text == "🛠 Админка":
+        return await admin_cmd(update, context)
 
     if step == "name":
         context.user_data["name"] = text
@@ -265,7 +267,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(
             "Я пока понимаю только кнопки 😅\nНажмите «📝 Оставить заявку для юриста».",
-            reply_markup=main_keyboard())
+            reply_markup=keyboard_for(update.effective_user.id))
 
 # ---------- Админка ----------
 
@@ -283,7 +285,7 @@ async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if not is_admin_uid(uid):
         await update.message.reply_text("Этот раздел доступен только администраторам КомИнвест.",
-                                        reply_markup=main_keyboard())
+                                        reply_markup=keyboard_for(update.effective_user.id))
         return
     await update.message.reply_text("🛠 Админ-панель КомИнвест:", reply_markup=admin_menu(uid))
 

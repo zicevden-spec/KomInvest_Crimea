@@ -117,7 +117,10 @@ def build_catalog(objects):
         block.append(Spacer(1, 0.25*cm))
         block.append(Paragraph(escape(o.get("description", ""))[:900], st["body"]))
         block.append(Spacer(1, 0.4*cm))
-        story.append(block if len(block) > 5 else KeepTogether(block))
+        if len(block) > 5:
+            story.extend(block)
+        else:
+            story.append(KeepTogether(block))
         story.append(PageBreak())
 
     story.append(Spacer(1, 6*cm))

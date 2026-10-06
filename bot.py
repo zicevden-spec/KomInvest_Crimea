@@ -297,7 +297,6 @@ def admin_menu(uid):
         [InlineKeyboardButton("📥 Экспорт в Excel", callback_data="adm_export")],
         [InlineKeyboardButton("🏢 Объекты", callback_data="adm_objects")],
         [InlineKeyboardButton("📚 Каталог (PDF)", callback_data="adm_catalog")],
-        [InlineKeyboardButton("📚 Каталог (PDF)", callback_data="adm_catalog")],
     ]
     if is_super(uid):
         rows.append([InlineKeyboardButton("👥 Админы", callback_data="adm_admins")])

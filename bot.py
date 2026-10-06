@@ -309,22 +309,26 @@ async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🛠 Админ-панель КомИнвест:", reply_markup=admin_menu(uid))
 
 async def publish_object(context, o):
+    from html import escape as esc
     link = f"https://t.me/{BOT_USERNAME}?start=lead_obj_{o['id']}" if BOT_USERNAME else CHANNEL_URL
-    caption = (f"🏢 {o['title']}\n\n{o['description'][:700]}\n\n"
-               f"💰 Цена: {o['price']}\n📍 {o['location']}\n"
-               f"📐 {o.get('area', '-')} | 🏷 {o.get('type', '-')}\n\n"
-               f"✍️ Оставить заявку: {link}")[:1024]
+    caption = (f"🏢 <b>{esc(o['title'])}</b>\n\n{esc(o['description'][:650])}\n\n"
+               f"💰 Цена: <b>{esc(o['price'])}</b>\n"
+               f"📍 {esc(o['location'])}\n"
+               f"📐 {esc(str(o.get('area', '-')))} | 🏷 {esc(str(o.get('type', '-')))}\n\n"
+               f"✍️ Оставить заявку — кнопка ниже 👇")
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton("📝 Оставить заявку для юриста", url=link)]])
     media_ids = ([o["cover"]] if o.get("cover") else []) + o.get("photos", [])
     media_ids = media_ids[:10]
     if len(media_ids) > 1:
-        media = [InputMediaPhoto(media_ids[0], caption=caption)] + \
+        media = [InputMediaPhoto(media_ids[0], caption=caption, parse_mode="HTML")] + \
                 [InputMediaPhoto(p) for p in media_ids[1:]]
-        await context.bot.send_media_group(CHANNEL_ID, media=media)
+        await context.bot.send_media_group(CHANNEL_ID, media=media, reply_markup=kb)
     elif len(media_ids) == 1:
-        await context.bot.send_photo(CHANNEL_ID, photo=media_ids[0], caption=caption)
+        await context.bot.send_photo(CHANNEL_ID, photo=media_ids[0], caption=caption,
+                                     parse_mode="HTML", reply_markup=kb)
     else:
-        await context.bot.send_message(CHANNEL_ID, text=caption)
-
+        await context.bot.send_message(CHANNEL_ID, text=caption,
+                                       parse_mode="HTML", reply_markup=kb)
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     try:

@@ -30,8 +30,7 @@ def load_leads():
     return gh_store.read_local("leads.json", [])
 
 def save_lead(lead):
-    leads = load_leads()
-    leads.append(lead)
+    leads = load_leads(); leads.append(lead)
     gh_store.push("leads.json", leads)
 
 def load_admins():
@@ -53,7 +52,7 @@ def is_admin_uid(uid):
     d = load_admins()
     return uid in d.get("super", []) or uid in d.get("admins", [])
 
-# ---------- Клиент ----------
+# ---------- Клавиатуры ----------
 
 def main_keyboard():
     return ReplyKeyboardMarkup(
@@ -61,7 +60,16 @@ def main_keyboard():
          [KeyboardButton("ℹ️ О компании"), KeyboardButton("📰 Наш канал")]],
         resize_keyboard=True)
 
+def keyboard_for(uid):
+    kb = main_keyboard()
+    if is_admin_uid(uid):
+        kb.keyboard.append([KeyboardButton("🛠 Админка")])
+    return kb
+
+# ---------- Клиент ----------
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     uid = update.effective_user.id
     user_states.pop(uid, None)
     context.user_data["source"] = context.args[0] if context.args else "direct"
@@ -70,9 +78,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Помогаем находить доходные объекты, проверять их юридическую чистоту "
         "и безопасно выходить на сделку.\n\n"
         "Нажмите кнопку ниже 👇",
-        reply_markup=keyboard_for(update.effective_user.id))
+        reply_markup=keyboard_for(uid))
 
 async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     await update.message.reply_text(
         "🏢 «КомИнвест» — подбор и проверка коммерческой недвижимости в Крыму.\n\n"
         "✅ Офисы, склады, стрит-ритейл, земельные участки\n"
@@ -82,10 +91,12 @@ async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=keyboard_for(update.effective_user.id))
 
 async def channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     await update.message.reply_text("📰 Подписывайтесь на наш канал:\n" + CHANNEL_URL,
                                     reply_markup=keyboard_for(update.effective_user.id))
 
 async def lead_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     user_states[update.effective_user.id] = "name"
     await update.message.reply_text("Отлично! 🙌\nКак к вам обращаться?",
                                     reply_markup=keyboard_for(update.effective_user.id))
@@ -102,7 +113,7 @@ async def finish_lead(update: Update, context: ContextTypes.DEFAULT_TYPE, phone:
     await update.message.reply_text(
         f"Спасибо, {name}! ✅\n\nВаша заявка принята. Юрист свяжется с вами "
         "в ближайшее время.\n\nА пока — загляните в наш канал:\n" + CHANNEL_URL,
-        reply_markup=keyboard_for(update.effective_user.id))
+        reply_markup=keyboard_for(uid))
     try:
         await context.bot.send_message(ADMIN_ID,
             f"🔥 НОВАЯ ЗАЯВКА #{lead['id']}\n\n👤 {name}\n📞 {phone}\n"
@@ -111,9 +122,10 @@ async def finish_lead(update: Update, context: ContextTypes.DEFAULT_TYPE, phone:
         print(f"Не удалось уведомить админа: {e}")
 
 async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     await finish_lead(update, context, update.message.contact.phone_number)
 
-# ---------- Объекты: карточка и меню ----------
+# ---------- Объекты ----------
 
 def obj_card(o):
     return (f"🏢 {o['title']}\n\n{o['description']}\n\n"
@@ -138,13 +150,16 @@ def obj_edit_kb(oid):
     rows.append([InlineKeyboardButton("⬅️ К карточке", callback_data=f"obj_view_{oid}")])
     return InlineKeyboardMarkup(rows)
 
-# ---------- Фото (обложка и доп. фото) ----------
+# ---------- Фото ----------
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user:
+        # Это апдейт из канала (публикация поста) — игнорируем
+        return
     uid = update.effective_user.id
     st = user_states.get(uid)
     if not (isinstance(st, dict) and is_admin_uid(uid)):
-        await update.message.reply_text("Сейчас не жду фото 😅", reply_markup=keyboard_for(update.effective_user.id))
+        await update.message.reply_text("Сейчас не жду фото 😅", reply_markup=keyboard_for(uid))
         return
     step = st.get("step")
     fid = update.message.photo[-1].file_id
@@ -154,8 +169,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         st["photos"] = []
         st["step"] = "obj_photos"
         await update.message.reply_text(
-            "🖼 Обложка принята!\n\nТеперь пришлите дополнительные фото (до 9, по одной "
-            "или альбомом) — или напишите «далее», если хватит обложки.")
+            "🖼 Обложка принята!\n\nТеперь пришлите дополнительные фото (до 9) — "
+            "или напишите «далее».")
     elif step == "obj_photos":
         if len(st["photos"]) >= 9:
             await update.message.reply_text("Максимум 9 доп. фото. Напишите «далее».")
@@ -171,17 +186,17 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_states.pop(uid, None)
         await update.message.reply_text("✅ Обложка заменена!", reply_markup=obj_view_kb(st["oid"]))
     else:
-        await update.message.reply_text("Сейчас не жду фото 😅", reply_markup=keyboard_for(update.effective_user.id))
+        await update.message.reply_text("Сейчас не жду фото 😅", reply_markup=keyboard_for(uid))
 
 # ---------- Текст ----------
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     uid = update.effective_user.id
     text = update.message.text.strip()
     st = user_states.get(uid)
     step = st.get("step") if isinstance(st, dict) else st
 
-    # --- Мастер объекта ---
     if isinstance(st, dict) and str(step).startswith("obj_") and is_admin_uid(uid):
         if step == "obj_photos":
             st["step"] = "obj_title"
@@ -208,7 +223,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             rows = [[InlineKeyboardButton(t, callback_data=f"ots_{i}_new")] for i, t in enumerate(OBJ_TYPES)]
             await update.message.reply_text("🏷 Выберите тип объекта:", reply_markup=InlineKeyboardMarkup(rows))
             return
-        # --- Редактирование полей ---
         if step == "obj_edit":
             objs = load_objects()
             o = next((x for x in objs if x["id"] == st["oid"]), None)
@@ -221,17 +235,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("✅ Сохранено! Карточка обновлена:",
                                             reply_markup=obj_view_kb(st["oid"]))
             if o:
-                await update.message.reply_photo(photo=o.get("cover") or (o.get("photos") or [None])[0],
-                                                 caption=obj_card(o)[:1024]) if (o.get("cover") or o.get("photos")) else None
+                pic = o.get("cover") or (o.get("photos") or [None])[0]
+                if pic:
+                    try:
+                        await update.message.reply_photo(photo=pic, caption=obj_card(o)[:1024])
+                    except Exception as e:
+                        await update.message.reply_text(obj_card(o))
+                else:
+                    await update.message.reply_text(obj_card(o))
             return
 
-    # --- Супер-админ: админы ---
     if step in ("add_admin", "del_admin") and is_super(uid):
         try:
             target = (await context.bot.get_chat(text)).id if text.startswith("@") else int(text)
         except Exception:
             await update.message.reply_text("Не распознал. Пришли числовой ID или @username.",
-                                            reply_markup=keyboard_for(update.effective_user.id))
+                                            reply_markup=keyboard_for(uid))
             return
         d = load_admins()
         if step == "add_admin":
@@ -246,7 +265,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(msg, reply_markup=admin_menu(uid))
         return
 
-    # --- Клиент ---
     if text in ("📝 Оставить заявку", "📝 Оставить заявку для юриста"):
         return await lead_start(update, context)
     if text == "ℹ️ О компании": return await about(update, context)
@@ -267,7 +285,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(
             "Я пока понимаю только кнопки 😅\nНажмите «📝 Оставить заявку для юриста».",
-            reply_markup=keyboard_for(update.effective_user.id))
+            reply_markup=keyboard_for(uid))
 
 # ---------- Админка ----------
 
@@ -282,15 +300,15 @@ def admin_menu(uid):
     return InlineKeyboardMarkup(rows)
 
 async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user: return
     uid = update.effective_user.id
     if not is_admin_uid(uid):
         await update.message.reply_text("Этот раздел доступен только администраторам КомИнвест.",
-                                        reply_markup=keyboard_for(update.effective_user.id))
+                                        reply_markup=keyboard_for(uid))
         return
     await update.message.reply_text("🛠 Админ-панель КомИнвест:", reply_markup=admin_menu(uid))
 
 async def publish_object(context, o):
-    """Публикация в канал. Бросает исключение при ошибке."""
     link = f"https://t.me/{BOT_USERNAME}?start=lead_obj_{o['id']}" if BOT_USERNAME else CHANNEL_URL
     caption = (f"🏢 {o['title']}\n\n{o['description'][:700]}\n\n"
                f"💰 Цена: {o['price']}\n📍 {o['location']}\n"
@@ -299,8 +317,8 @@ async def publish_object(context, o):
     media_ids = ([o["cover"]] if o.get("cover") else []) + o.get("photos", [])
     media_ids = media_ids[:10]
     if len(media_ids) > 1:
-        media = [InputMediaPhoto(p) for p in media_ids]
-        media[0].caption = caption
+        media = [InputMediaPhoto(media_ids[0], caption=caption)] + \
+                [InputMediaPhoto(p) for p in media_ids[1:]]
         await context.bot.send_media_group(CHANNEL_ID, media=media)
     elif len(media_ids) == 1:
         await context.bot.send_photo(CHANNEL_ID, photo=media_ids[0], caption=caption)
@@ -313,6 +331,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.answer()
     except Exception:
         pass
+    if not update.effective_user: return
     uid = q.from_user.id
     if not is_admin_uid(uid):
         await q.edit_message_text("❌ Недоступно.")
@@ -358,7 +377,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.edit_message_text("🏢 Выберите категорию объектов:", reply_markup=kb)
 
         elif data == "obj_cat_civ":
-            await q.edit_message_text("🏠 Гражданское жильё: категория откроется в следующем обновлении.",
+            await q.edit_message_text("🏠 Гражданское жильё: категория откроется позже.",
                                       reply_markup=InlineKeyboardMarkup(
                                           [[InlineKeyboardButton("⬅️ Категории", callback_data="adm_objects")]]))
 
@@ -374,7 +393,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif data == "obj_add":
             user_states[uid] = {"step": "obj_cover"}
             await q.edit_message_text(
-                "🖼 Шаг 1/7: пришлите ОБЛОЖКУ объекта — главное фото, которое увидят первым.")
+                "🖼 Шаг 1/7: пришлите ОБЛОЖКУ объекта — главное фото.")
 
         elif data == "obj_list":
             objs = [o for o in load_objects() if o.get("category") == "commercial"]
@@ -397,7 +416,10 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
             pic = o.get("cover") or (o.get("photos") or [None])[0]
             if pic:
-                await q.message.reply_photo(photo=pic, caption=obj_card(o)[:1024])
+                try:
+                    await q.message.reply_photo(photo=pic, caption=obj_card(o)[:1024])
+                except Exception as e:
+                    await q.message.reply_text(obj_card(o) + f"\n\n(фото не показ: {e})")
             else:
                 await q.message.reply_text(obj_card(o))
             await q.edit_message_text(f"Карточка #{oid} — выше.", reply_markup=obj_view_kb(oid))
@@ -512,7 +534,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
 async def leads_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin_uid(update.effective_user.id): return
+    if not update.effective_user or not is_admin_uid(update.effective_user.id): return
     leads = load_leads()
     if not leads:
         await update.message.reply_text("📋 Заявок пока нет.")
@@ -523,7 +545,7 @@ async def leads_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("\n".join(lines))
 
 async def stats_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin_uid(update.effective_user.id): return
+    if not update.effective_user or not is_admin_uid(update.effective_user.id): return
     leads = load_leads()
     today = datetime.now().strftime("%Y-%m-%d")
     objs = load_objects()
@@ -533,7 +555,7 @@ async def stats_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Объектов: {len(objs)} | Опубликовано: {sum(1 for o in objs if o.get('published'))}")
 
 async def export_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin_uid(update.effective_user.id): return
+    if not update.effective_user or not is_admin_uid(update.effective_user.id): return
     import openpyxl
     from openpyxl.styles import Font
     leads = load_leads()

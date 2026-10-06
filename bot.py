@@ -576,6 +576,14 @@ async def export_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         filename=f"kominvest_leads_{datetime.now().strftime('%d%m%Y')}.xlsx",
         caption=f"📥 Выгрузка заявок: {len(leads)} шт.")
 
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    traceback.print_exc()
+    try:
+        if update is not None and update.effective_message is not None:
+            await update.effective_message.reply_text(f"⚠️ Техническая ошибка: {context.error}")
+    except Exception:
+        pass
+
 # ---------- Запуск ----------
 
 if __name__ == "__main__":
@@ -592,6 +600,7 @@ if __name__ == "__main__":
     app.add_handler(MessageHandler(filters.CONTACT, handle_contact))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_error_handler(error_handler)
 
     if WEBHOOK_URL:
         async def webhook_handler(request):

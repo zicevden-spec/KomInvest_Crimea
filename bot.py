@@ -61,10 +61,13 @@ def main_keyboard():
         resize_keyboard=True)
 
 def keyboard_for(uid):
-    kb = main_keyboard()
+    rows = [
+        [KeyboardButton("📝 Оставить заявку для юриста")],
+        [KeyboardButton("ℹ️ О компании"), KeyboardButton("📰 Наш канал")]
+    ]
     if is_admin_uid(uid):
-        kb.keyboard.append([KeyboardButton("🛠 Админка")])
-    return kb
+        rows.append([KeyboardButton("🛠 Админка")])
+    return ReplyKeyboardMarkup(rows, resize_keyboard=True)
 
 # ---------- Клиент ----------
 
@@ -153,9 +156,7 @@ def obj_edit_kb(oid):
 # ---------- Фото ----------
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.effective_user:
-        # Это апдейт из канала (публикация поста) — игнорируем
-        return
+    if not update.effective_user: return
     uid = update.effective_user.id
     st = user_states.get(uid)
     if not (isinstance(st, dict) and is_admin_uid(uid)):
@@ -329,6 +330,7 @@ async def publish_object(context, o):
     else:
         await context.bot.send_message(CHANNEL_ID, text=caption,
                                        parse_mode="HTML", reply_markup=kb)
+
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     try:

@@ -18,35 +18,48 @@ DARK = HexColor("#141414")
 LIGHT = HexColor("#F5F5F5")
 GREY = HexColor("#AAAAAA")
 
-FONT_URLS = [
-    ("DejaVuSans", "https://cdn.jsdelivr.net/gh/dejavu-fonts/dejavu-fonts@master/ttf/DejaVuSans.ttf"),
-    ("DejaVuSans-Bold", "https://cdn.jsdelivr.net/gh/dejavu-fonts/dejavu-fonts@master/ttf/DejaVuSans-Bold.ttf"),
+FONT_FILES = ["DejaVuSans.ttf", "DejaVuSans-Bold.ttf"]
+FONT_MIRRORS = [
+    "https://raw.githubusercontent.com/prawnpdf/prawn/master/data/fonts/{f}",
 ]
 
 _FONTS_OK = None
 
 def fonts_ok():
     global _FONTS_OK
-    if _FONTS_OK is None:
-        os.makedirs("data", exist_ok=True)
-        for name, url in FONT_URLS:
-            path = os.path.join("data", f"{name}.ttf")
-            if not os.path.exists(path):
+    if _FONTS_OK is not None:
+        return _FONTS_OK
+    for fname in FONT_FILES:
+        path = None
+        for cand in (os.path.join("fonts", fname), os.path.join("data", fname)):
+            if os.path.exists(cand):
+                path = cand
+                break
+        if not path:
+            for tpl in FONT_MIRRORS:
+                url = tpl.format(f=fname)
                 try:
                     r = requests.get(url, timeout=60)
-                    if r.status_code == 200:
+                    if r.status_code == 200 and len(r.content) > 100000:
+                        os.makedirs("data", exist_ok=True)
+                        path = os.path.join("data", fname)
                         with open(path, "wb") as f:
                             f.write(r.content)
+                        print(f"Шрифт скачан: {url}")
+                        break
+                    print(f"Шрифт: зеркало вернуло {r.status_code}: {url}")
                 except Exception as e:
-                    print(f"font download error {name}: {e}")
-            if os.path.exists(path):
-                try:
-                    pdfmetrics.registerFont(TTFont(name, path))
-                except Exception as e:
-                    print(f"font register error {name}: {e}")
-        names = set(pdfmetrics.getRegisteredFontNames())
-        _FONTS_OK = ("DejaVuSans" in names) and ("DejaVuSans-Bold" in names)
-        print(f"Каталог: шрифты DejaVu = {_FONTS_OK}")
+                    print(f"Шрифт ошибка скачивания {url}: {e}")
+        if path:
+            name = fname.replace(".ttf", "")
+            try:
+                pdfmetrics.registerFont(TTFont(name, path))
+                print(f"Шрифт зарегистрирован: {name} из {path}")
+            except Exception as e:
+                print(f"Шрифт ошибка регистрации {name}: {e}")
+    names = set(pdfmetrics.getRegisteredFontNames())
+    _FONTS_OK = ("DejaVuSans" in names) and ("DejaVuSans-Bold" in names)
+    print(f"Каталог: шрифты DejaVu = {_FONTS_OK}")
     return _FONTS_OK
 
 def F(bold=False):
@@ -117,10 +130,8 @@ def build_catalog(objects):
         block.append(Spacer(1, 0.25*cm))
         block.append(Paragraph(escape(o.get("description", ""))[:900], st["body"]))
         block.append(Spacer(1, 0.4*cm))
-        if len(block) > 5:
-            story.extend(block)
-        else:
-            story.append(KeepTogether(block))
+        for flow in block:
+            story.append(flow)
         story.append(PageBreak())
 
     story.append(Spacer(1, 6*cm))

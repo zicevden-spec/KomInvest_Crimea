@@ -325,7 +325,11 @@ async def publish_object(context, o):
     if len(media_ids) > 1:
         media = [InputMediaPhoto(media_ids[0], caption=caption, parse_mode="HTML")] + \
                 [InputMediaPhoto(p) for p in media_ids[1:]]
-        await context.bot.send_media_group(CHANNEL_ID, media=media, reply_markup=kb)
+        await context.bot.send_media_group(CHANNEL_ID, media=media)
+        await context.bot.send_message(
+            CHANNEL_ID,
+            text="✍️ Понравился объект? Оставьте заявку — юрист свяжется с вами 👇",
+            reply_markup=kb)
     elif len(media_ids) == 1:
         await context.bot.send_photo(CHANNEL_ID, photo=media_ids[0], caption=caption,
                                      parse_mode="HTML", reply_markup=kb)

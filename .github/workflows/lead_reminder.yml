@@ -2,7 +2,7 @@ name: Lead Reminder
 
 on:
   schedule:
-    - cron: "0 16 * * *"   # 19:00 МСК
+    - cron: "0 16 * * *"   # 19:00 РњРЎРљ
   workflow_dispatch:
 
 jobs:
@@ -18,6 +18,6 @@ jobs:
       - name: Send reminder
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          GITHUB_PAT: ${{ secrets.GITHUB_PAT }}
+          GH_PAT: ${{ secrets.GITHUB_PAT }}
           TELEGRAM_USER_ID: ${{ secrets.TELEGRAM_USER_ID }}
         run: python reminder.py

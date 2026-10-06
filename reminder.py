@@ -9,7 +9,7 @@ except Exception:
     pass
 
 REPO = os.getenv("GH_REPO", "zicevden-spec/KomInvest_Crimea")
-TOKEN = os.getenv("GITHUB_PAT", "")
+TOKEN = os.getenv("GH_PAT", "")
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 ADMIN_ID = int(os.getenv("TELEGRAM_USER_ID", "0"))
 MSK = timezone(timedelta(hours=3))

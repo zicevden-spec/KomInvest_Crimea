@@ -2,7 +2,7 @@
 import os, json, base64, requests
 
 REPO = os.getenv("GH_REPO", "zicevden-spec/KomInvest_Crimea")
-TOKEN = os.getenv("GITHUB_PAT", "")
+TOKEN = os.getenv("GH_PAT", "") or os.getenv("GITHUB_PAT", "")
 BRANCH = "main"
 API = f"https://api.github.com/repos/{REPO}/contents/data"
 

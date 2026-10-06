@@ -6,6 +6,7 @@ from telegram import (Update, ReplyKeyboardMarkup, KeyboardButton,
 from telegram.ext import (Application, CommandHandler, MessageHandler,
                           CallbackQueryHandler, ContextTypes, filters)
 from dotenv import load_dotenv
+import gh_store
 
 load_dotenv()
 
@@ -23,28 +24,18 @@ user_states = {}
 # ---------- Хранилище ----------
 
 def load_leads():
-    if not os.path.exists(LEADS_FILE): return []
-    try:
-        with open(LEADS_FILE, encoding="utf-8") as f: return json.load(f)
-    except Exception: return []
+    return gh_store.read_local("leads.json", [])
 
 def save_lead(lead):
     leads = load_leads()
     leads.append(lead)
-    with open(LEADS_FILE, "w", encoding="utf-8") as f:
-        json.dump(leads, f, ensure_ascii=False, indent=2)
+    gh_store.push("leads.json", leads)
 
 def load_admins():
-    if not os.path.exists(ADMINS_FILE):
-        return {"super": [ADMIN_ID], "admins": []}
-    try:
-        with open(ADMINS_FILE, encoding="utf-8") as f: return json.load(f)
-    except Exception:
-        return {"super": [ADMIN_ID], "admins": []}
+    return gh_store.read_local("admins.json", {"super": [ADMIN_ID], "admins": []})
 
 def save_admins(data):
-    with open(ADMINS_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    gh_store.push("admins.json", data)
 
 def is_super(uid):
     return uid in load_admins().get("super", [])
@@ -356,6 +347,7 @@ if __name__ == "__main__":
             return web.Response(text="OK")
 
         async def main():
+            gh_store.sync_all({"leads.json": [], "objects.json": [], "admins.json": {"super": [ADMIN_ID], "admins": []}})
             await app.initialize()
             await app.start()
             try:

@@ -389,267 +389,157 @@ async def safe_edit(q, text, reply_markup=None):
             raise e
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
+    
     try:
         await q.answer()
-    except Exception:
-        pass
-    if not update.effective_user: return
-    uid = q.from_user.id
-    if not is_admin_uid(uid):
-        await safe_edit(q,"❌ Недоступно.")
-        return
-    data = q.data
-
-    try:
-        if data == "adm_leads":
-            leads = load_leads()
-            if not leads:
-                text = "📋 Заявок пока нет."
-            else:
-                lines = [f"📋 Заявки: всего {len(leads)}", ""]
-                for l in leads[-15:]:
-                    lines.append(f"#{l['id']} | {l['name']} | {l['phone']} | {l['source']} | {l['date']}")
-                text = "\n".join(lines)
-            await q.edit_message_text(text, )
-
-        elif data.startswith("lc_"):
-            lid = int(data.split("_")[-1])
-            l = next((x for x in load_leads() if x["id"] == lid), None)
-            if not l:
-                await safe_edit(q,"Заявка не найдена.", )
-                return
-            await safe_edit(q,lead_card_text(l), reply_markup=lead_kb(l))
-
-        elif data.startswith("ls_"):
-            _, lid, code = data.split("_")
-            leads = load_leads()
-            l = next((x for x in leads if x["id"] == int(lid)), None)
-            if not l:
-                await q.edit_message_text("Заявка не найдена.", )
-                return
-            l["status"] = code
-            l["status_date"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-            update_leads(leads)
-            await safe_edit(q,f"✅ Заявка #{lid}: {LEAD_STATUSES[code]}",
-                                      reply_markup=lead_kb(l))
-
-        elif data == "adm_export":
-            import openpyxl
-            from openpyxl.styles import Font
-            leads = load_leads()
-            if not leads:
-                await q.edit_message_text("Экспортировать нечего.", )
-                return
-            wb = openpyxl.Workbook(); ws = wb.active; ws.title = "Заявки"
-            ws.append(["№", "Имя", "Телефон", "Источник", "Дата", "Статус", "Статус изменён"])
-            for cell in ws[1]: cell.font = Font(bold=True)
-            for l in leads:
-                ws.append([l["id"], l["name"], l["phone"], l["source"], l["date"], LEAD_STATUSES.get(l.get("status", "new"), l.get("status", "new")), l.get("status_date", "")])
-            buf = io.BytesIO(); wb.save(buf); buf.seek(0)
-            await q.message.reply_document(document=buf,
-                filename=f"kominvest_leads_{datetime.now().strftime('%d%m%Y')}.xlsx",
-                caption=f"📥 Выгрузка заявок: {len(leads)} шт.")
-            await safe_edit(q,"✅ Файл отправлен выше.", )
-
-        elif data == "adm_objects":
+        
+        if not update.effective_user: 
+            return
+            
+        uid = q.from_user.id
+        
+        # Проверка доступа к админке
+        if not is_admin_uid(uid):
+            await safe_edit(q, "⛔ Доступ запрещен.")
+            return
+            
+        data = q.data
+        
+        # --- ЛОГИКА АДМИНКИ ---
+        
+        if data == "adm_enter":
+            leads_count = len(load_leads())
+            text = f"🔧 Админ-панель КомИнвест:\n\n• Лидов: {leads_count}\n• Объектов: {len(load_objects())}"
             kb = InlineKeyboardMarkup([
-                [InlineKeyboardButton("🏢 Коммерческая недвижимость", callback_data="obj_cat_com")],
-                [InlineKeyboardButton("🏠 Гражданское жильё", callback_data="obj_cat_civ")],
-                [InlineKeyboardButton("⬅️ В меню", callback_data="adm_back")],
+                [InlineKeyboardButton("📋 Лиды", callback_data="adm_leads"),
+                 InlineKeyboardButton("🏢 Объекты", callback_data="adm_objs")],
+                [InlineKeyboardButton("📊 Экспорт Excel", callback_data="adm_export"),
+                 InlineKeyboardButton("👥 Админы", callback_data="adm_users")]
             ])
-            await safe_edit(q,"🏢 Выберите категорию объектов:", reply_markup=kb)
-
-        elif data == "obj_cat_civ":
-            await q.edit_message_text("🏠 Гражданское жильё: категория откроется позже.",
-                                      reply_markup=InlineKeyboardMarkup(
-                                          [[InlineKeyboardButton("⬅️ Категории", callback_data="adm_objects")]]))
-
-        elif data == "obj_cat_com":
-            objs = [o for o in load_objects() if o.get("category") == "commercial"]
-            kb = InlineKeyboardMarkup([
-                [InlineKeyboardButton("➕ Добавить объект", callback_data="obj_add")],
-                [InlineKeyboardButton(f"📋 Список объектов ({len(objs)})", callback_data="obj_list")],
-                [InlineKeyboardButton("⬅️ Категории", callback_data="adm_objects")],
-            ])
-            await q.edit_message_text("🏢 Коммерческая недвижимость:", reply_markup=kb)
-
-        elif data == "obj_add":
-            user_states[uid] = {"step": "obj_cover"}
-            await q.edit_message_text(
-                "🖼 Шаг 1/7: пришлите ОБЛОЖКУ объекта — главное фото.")
-
-        elif data == "obj_list":
-            objs = [o for o in load_objects() if o.get("category") == "commercial"]
-            if not objs:
-                kb = InlineKeyboardMarkup([
-                    [InlineKeyboardButton("➕ Добавить первый объект", callback_data="obj_add")],
-                    [InlineKeyboardButton("⬅️ Назад", callback_data="obj_cat_com")]])
-                await q.edit_message_text("Объектов пока нет.", reply_markup=kb)
-                return
-            rows = [[InlineKeyboardButton(f"{o['id']}. {o['title'][:26]} | {o['price'][:14]}",
-                      callback_data=f"obj_view_{o['id']}")] for o in objs[-12:]]
-            rows.append([InlineKeyboardButton("⬅️ Назад", callback_data="obj_cat_com")])
-            await q.edit_message_text("📋 Объекты:", reply_markup=InlineKeyboardMarkup(rows))
-
-        elif data.startswith("obj_view_"):
-            oid = int(data.split("_")[-1])
-            o = next((x for x in load_objects() if x["id"] == oid), None)
-            if not o:
-                await q.edit_message_text("Объект не найден.", )
-                return
-            pic = o.get("cover") or (o.get("photos") or [None])[0]
-            if pic:
-                try:
-                    await q.message.reply_photo(photo=pic, caption=obj_card(o)[:1024])
-                except Exception as e:
-                    await q.message.reply_text(obj_card(o) + f"\n\n(фото не показ: {e})")
-            else:
-                await q.message.reply_text(obj_card(o))
-            await safe_edit(q,f"Карточка #{oid} — выше.", reply_markup=obj_view_kb(oid))
-
-        elif data.startswith("obj_pub_"):
-            oid = int(data.split("_")[-1])
-            objs = load_objects()
-            o = next((x for x in objs if x["id"] == oid), None)
-            if not o:
-                await q.edit_message_text("Объект не найден.", )
-                return
-            try:
-                await publish_object(context, o)
-                o["published"] = True
-                save_objects(objs)
-                await safe_edit(q,f"✅ Объект #{oid} опубликован в канале!",
-                                          )
-            except Exception as e:
-                traceback.print_exc()
-                await safe_edit(q,
-                    f"❌ Ошибка публикации #{oid}: {e}\n\n(подробности в логах Render)",
-                    reply_markup=obj_view_kb(oid))
-
-        elif data.startswith("obj_del_"):
-            oid = int(data.split("_")[-1])
-            objs = [x for x in load_objects() if x["id"] != oid]
-            save_objects(objs)
-            await q.edit_message_text(f"🗑 Объект #{oid} удалён.", )
-
-        elif data.startswith("obj_edit_"):
-            oid = int(data.split("_")[-1])
-            await safe_edit(q,f"✏️ Редактирование объекта #{oid}. Выберите поле:",
-                                      reply_markup=obj_edit_kb(oid))
-
-        elif data.startswith("oe_cover_"):
-            oid = int(data.split("_")[-1])
-            user_states[uid] = {"step": "obj_edit_cover", "oid": oid}
-            await q.edit_message_text("🖼 Пришлите новую обложку одним фото:")
-
-        elif data.startswith("oe_type_"):
-            oid = int(data.split("_")[-1])
-            rows = [[InlineKeyboardButton(t, callback_data=f"ots_{i}_{oid}")] for i, t in enumerate(OBJ_TYPES)]
-            await q.edit_message_text("🏷 Выберите новый тип:", reply_markup=InlineKeyboardMarkup(rows))
-
-        elif data.startswith("oe_"):
-            _, field, oid = data.split("_")
-            user_states[uid] = {"step": "obj_edit", "oid": int(oid), "field": field}
-            await q.edit_message_text(f"Пришите новое значение для поля «{EDIT_FIELDS[field]}»:")
-
-        elif data.startswith("ots_"):
-            _, idx, target = data.split("_")
-            idx = int(idx)
-            objs = load_objects()
-            if target == "new":
-                st = user_states.get(uid)
-                if not (isinstance(st, dict) and st.get("step") == "obj_type"):
-                    return
-                st["type"] = OBJ_TYPES[idx]
-                oid = max([o["id"] for o in objs], default=0) + 1
-                obj = {"id": oid, "category": "commercial", "cover": st.get("cover"),
-                       "photos": st.get("photos", []), "title": st["title"],
-                       "description": st["description"], "price": st["price"],
-                       "location": st["location"], "area": st["area"], "type": st["type"],
-                       "status": "active", "created": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                       "published": False}
-                objs.append(obj)
-                save_objects(objs)
-                user_states.pop(uid, None)
-                await q.edit_message_text(f"✅ Объект #{oid} «{obj['title']}» сохранён!",
-                                          reply_markup=obj_view_kb(oid))
-            else:
-                oid = int(target)
-                o = next((x for x in objs if x["id"] == oid), None)
-                if o:
-                    o["type"] = OBJ_TYPES[idx]
-                    save_objects(objs)
-                user_states.pop(uid, None)
-                await q.edit_message_text(f"✅ Тип обновлён: {OBJ_TYPES[idx]}",
-                                          reply_markup=obj_view_kb(oid))
-
-        elif data == "adm_catalog":
-            await q.edit_message_text("📚 Каталог PDF: что сделать?",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("📥 Получить сюда", callback_data="cat_get")],
-                    [InlineKeyboardButton("📢 В канал + закрепить", callback_data="cat_pub")],
-                    [InlineKeyboardButton("⬅️ В меню", callback_data="adm_back")],
-                ]))
-
-        elif data == "cat_get":
-            await q.edit_message_text("⏳ Собираю каталог...")
-            pdf = await build_catalog_bytes(context)
-            if pdf:
-                await q.message.reply_document(io.BytesIO(pdf),
-                    filename="kominvest_catalog.pdf", caption="📚 Каталог объектов")
-                await q.edit_message_text("📚 Каталог выше.", )
-            else:
-                await safe_edit(q,"Нет объектов для каталога.", )
-
-        elif data == "cat_pub":
-            await safe_edit(q,"⏳ Собираю и отправляю каталог в канал...")
-            pdf = await build_catalog_bytes(context)
-            if not pdf:
-                await q.edit_message_text("Нет объектов для каталога.", )
-            else:
-                msg = await context.bot.send_document(CHANNEL_ID,
-                    document=io.BytesIO(pdf), filename="kominvest_catalog.pdf",
-                    caption=f"📚 Каталог объектов КомИнвест обновлён {datetime.now().strftime('%d.%m.%Y')}")
-                try:
-                    await context.bot.pin_chat_message(CHANNEL_ID, msg.message_id,
-                                                       disable_notification=True)
-                except Exception as e:
-                    print(f"pin error: {e}")
-                await safe_edit(q,"✅ Каталог отправлен в канал и закреплён.",
-                                          )
-
-        elif data == "adm_admins":
-            if not is_super(uid):
-                await safe_edit(q,"❌ Только для супер-админа.")
-                return
-            d = load_admins()
-            text = ("👥 Состав админки:\n\n"
-                    f"👑 Супер: {', '.join(map(str, d['super'])) or '-'}\n"
-                    f"🛡 Админы: {', '.join(map(str, d['admins'])) or '-'}")
-            kb = InlineKeyboardMarkup([
-                [InlineKeyboardButton("➕ Добавить админа", callback_data="adm_add_admin")],
-                [InlineKeyboardButton("➖ Снять админа", callback_data="adm_del_admin")],
-                [InlineKeyboardButton("⬅️ В меню", callback_data="adm_back")],
-            ])
-            await q.edit_message_text(text, reply_markup=kb)
-
-        elif data == "adm_add_admin":
-            user_states[uid] = "add_admin"
-            await q.edit_message_text("Пришли Telegram ID или @username нового админа:")
-
-        elif data == "adm_del_admin":
-            user_states[uid] = "del_admin"
-            await q.edit_message_text("Пришли Telegram ID или @username админа, которого снять:")
+            await safe_edit(q, text, reply_markup=kb)
 
         elif data == "adm_back":
-            await q.edit_message_text("🛠 Админ-панель КомИнвест:", )
+            await safe_edit(q, "🔙 Вернулись в меню.", reply_markup=admin_menu(uid))
 
+        elif data == "adm_leads":
+            leads = load_leads()
+            if not leads:
+                await safe_edit(q, "📋 Заявок пока нет.", reply_markup=admin_menu(uid))
+                return
+                
+            rows = []
+            for l in leads[-10:][::-1]:
+                st = LEAD_STATUSES.get(l.get("status", "new"), "❓")
+                btn_text = f"#{l['id']} {st} | {l['name'][:15]}..."
+                rows.append([InlineKeyboardButton(btn_text, callback_data=f"lc_{l['id']}")])
+            
+            rows.append([InlineKeyboardButton("⬅️ В меню", callback_data="adm_back")])
+            
+            await safe_edit(q, f"📋 Всего заявок: {len(leads)}\nНажмите на заявку:", 
+                           reply_markup=InlineKeyboardMarkup(rows))
+
+        elif data.startswith("lc_"):
+            lid = int(data.split("_")[1])
+            leads = load_leads()
+            lead = next((x for x in leads if x["id"] == lid), None)
+            
+            if not lead:
+                await safe_edit(q, "Заявка не найдена.", reply_markup=admin_menu(uid))
+                return
+                
+            card_text = (f"👤 <b>{lead['name']}</b>\n"
+                         f"📞 <code>{lead['phone']}</code>\n"
+                         f"📍 Источник: {lead['source']}\n"
+                         f"🕒 Принят: {lead['date']}\n"
+                         f"📊 Статус: <b>{LEAD_STATUSES.get(lead.get('status','new'), 'Новый')}</b>")
+                         
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("📞 В работе", callback_data=f"ls_{lid}_work"),
+                 InlineKeyboardButton("✅ Закрыт", callback_data=f"ls_{lid}_done")],
+                [InlineKeyboardButton("❌ Отказ", callback_data=f"ls_{lid}_fail"),
+                 InlineKeyboardButton("🕐 Не дозвон", callback_data=f"ls_{lid}_recall")],
+                [InlineKeyboardButton("📱 Позвонить", url=f"tel:{lead['phone']}")],
+                [InlineKeyboardButton("⬅️ К списку", callback_data="adm_leads")]
+            ])
+            
+            await safe_edit(q, card_text, reply_markup=kb, parse_mode="HTML")
+
+        elif data.startswith("ls_"):
+            parts = data.split("_")
+            lid = int(parts[1])
+            code = parts[2] 
+            
+            leads = load_leads()
+            lead = next((x for x in leads if x["id"] == lid), None)
+            
+            if lead:
+                lead["status"] = code
+                lead["status_date"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                update_leads(leads) 
+                
+                msg = f"✅ Заявка #{lid}: {LEAD_STATUSES[code]}"
+                await safe_edit(q, msg, reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("Вернуться к карточке", callback_data=f"lc_{lid}")],
+                    [InlineKeyboardButton("К списку", callback_data="adm_leads")]
+                ]))
+            else:
+                await safe_edit(q, "Ошибка: заявка не найдена.", reply_markup=admin_menu(uid))
+
+        elif data == "adm_objs":
+            objs = load_objects()
+            rows = [[InlineKeyboardButton(f"#{o['id']} {o['title'][:20]}...", callback_data=f"ob_{o['id']}")] for o in objs[-5:]]
+            rows.append([InlineKeyboardButton("➕ Добавить объект", callback_data="obj_add")])
+            rows.append([InlineKeyboardButton("⬅️ В меню", callback_data="adm_back")])
+            
+            await safe_edit(q, f"🏢 Объектов: {len(objs)}", reply_markup=InlineKeyboardMarkup(rows))
+
+        elif data == "adm_export":
+            try:
+                wb = Workbook()
+                ws = wb.active
+                ws.title = "Leads"
+                ws.append(["№", "Имя", "Телефон", "Источник", "Дата", "Статус", "Изменён"])
+                
+                for l in load_leads():
+                    st = LEAD_STATUSES.get(l.get("status", "new"), l.get("status", "new"))
+                    ws.append([l["id"], l["name"], l["phone"], l["source"], l["date"], st, l.get("status_date", "")])
+                    
+                buf = io.BytesIO()
+                wb.save(buf)
+                buf.seek(0)
+                
+                await context.bot.send_document(
+                    chat_id=q.from_user.id,
+                    document=buf,
+                    filename=f"kominvest_leads_{datetime.now().strftime('%d%m%Y_%H%M')}.xlsx",
+                    caption="📊 Выгрузка лидов со статусами."
+                )
+                await q.answer("Файл отправлен!", show_alert=True)
+            except Exception as e:
+                print(f"Export error: {e}")
+                await q.answer("Ошибка при создании файла.", show_alert=True)
+
+        else:
+            await safe_edit(q, "🔙 Действие не распознано. Вернулись в меню.", reply_markup=admin_menu(uid))
+
+    except telegram.error.BadRequest as e:
+        err_str = str(e).lower()
+        if "message is not modified" in err_str:
+            pass 
+        elif "bot was blocked by the user" in err_str:
+            pass 
+        else:
+            print(f"Telegram API Error in callback: {e}")
+            
     except Exception as e:
+        print(f"Critical error in on_callback: {e}")
+        import traceback
         traceback.print_exc()
         try:
-            await safe_edit(q,f"⚠️ Ошибка: {e}", )
-        except Exception:
+            await q.answer("Произошла внутренняя ошибка.", show_alert=True)
+        except:
             pass
+
 
 async def leads_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_user or not is_admin_uid(update.effective_user.id): return

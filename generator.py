@@ -176,12 +176,12 @@ def strip_cot(text):
     return clean_text.strip()
 
 def call_ai(prompt):
-    for model in ["openai/gpt-oss-120b", "qwen/qwen3.6-27b", "google/gemma-2-9b-it:free"]:
+    for model in ["mistralai/mistral-nemo", "meta-llama/llama-3.1-8b-instruct", "microsoft/phi-3-mini-128k-instruct"]:
         try:
             print(f"Пробуем {model}...")
             resp = or_client.chat.completions.create(
                 model=model, messages=[{"role": "user", "content": prompt}],
-                temperature=0.8, max_tokens=1600,
+                temperature=0.8, max_tokens=500,
                 extra_headers={"HTTP-Referer": CHANNEL_URL, "X-Title": "KomInvest"}
             )
             text = (resp.choices[0].message.content or "").strip()

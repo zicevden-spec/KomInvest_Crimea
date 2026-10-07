@@ -319,6 +319,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ---------- Админка ----------
 
+async def safe_edit(q, text, reply_markup=None):
+    try:
+        if reply_markup:
+            await safe_edit(q,text=text, reply_markup=reply_markup)
+        else:
+            await q.edit_message_text(text=text)
+    except Exception as e:
+        if "Message is not modified" in str(e):
+            pass
+        else:
+            raise e
 def admin_menu(uid):
     rows = [
         [InlineKeyboardButton("📋 Лиды", callback_data="adm_leads")],
@@ -337,7 +348,7 @@ async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Этот раздел доступен только администраторам КомИнвест.",
                                         reply_markup=keyboard_for(uid))
         return
-    await update.message.reply_text("🛠 Админ-панель КомИнвест:", reply_markup=admin_menu(uid))
+    await update.message.reply_text("🛠 Админ-панель КомИнвест:", )
 
 async def publish_object(context, o):
     from html import escape as esc
@@ -374,7 +385,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_user: return
     uid = q.from_user.id
     if not is_admin_uid(uid):
-        await q.edit_message_text("❌ Недоступно.")
+        await safe_edit(q,"❌ Недоступно.")
         return
     data = q.data
 
@@ -388,27 +399,27 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 for l in leads[-15:]:
                     lines.append(f"#{l['id']} | {l['name']} | {l['phone']} | {l['source']} | {l['date']}")
                 text = "\n".join(lines)
-            await q.edit_message_text(text, reply_markup=admin_menu(uid))
+            await q.edit_message_text(text, )
 
         elif data.startswith("lc_"):
             lid = int(data.split("_")[-1])
             l = next((x for x in load_leads() if x["id"] == lid), None)
             if not l:
-                await q.edit_message_text("Заявка не найдена.", reply_markup=admin_menu(uid))
+                await safe_edit(q,"Заявка не найдена.", )
                 return
-            await q.edit_message_text(lead_card_text(l), reply_markup=lead_kb(l))
+            await safe_edit(q,lead_card_text(l), reply_markup=lead_kb(l))
 
         elif data.startswith("ls_"):
             _, lid, code = data.split("_")
             leads = load_leads()
             l = next((x for x in leads if x["id"] == int(lid)), None)
             if not l:
-                await q.edit_message_text("Заявка не найдена.", reply_markup=admin_menu(uid))
+                await q.edit_message_text("Заявка не найдена.", )
                 return
             l["status"] = code
             l["status_date"] = datetime.now().strftime("%Y-%m-%d %H:%M")
             update_leads(leads)
-            await q.edit_message_text(f"✅ Заявка #{lid}: {LEAD_STATUSES[code]}",
+            await safe_edit(q,f"✅ Заявка #{lid}: {LEAD_STATUSES[code]}",
                                       reply_markup=lead_kb(l))
 
         elif data == "adm_export":
@@ -416,7 +427,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             from openpyxl.styles import Font
             leads = load_leads()
             if not leads:
-                await q.edit_message_text("Экспортировать нечего.", reply_markup=admin_menu(uid))
+                await q.edit_message_text("Экспортировать нечего.", )
                 return
             wb = openpyxl.Workbook(); ws = wb.active; ws.title = "Заявки"
             ws.append(["№", "Имя", "Телефон", "Источник", "Дата", "Статус", "Статус изменён"])
@@ -427,7 +438,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.message.reply_document(document=buf,
                 filename=f"kominvest_leads_{datetime.now().strftime('%d%m%Y')}.xlsx",
                 caption=f"📥 Выгрузка заявок: {len(leads)} шт.")
-            await q.edit_message_text("✅ Файл отправлен выше.", reply_markup=admin_menu(uid))
+            await safe_edit(q,"✅ Файл отправлен выше.", )
 
         elif data == "adm_objects":
             kb = InlineKeyboardMarkup([
@@ -435,7 +446,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 [InlineKeyboardButton("🏠 Гражданское жильё", callback_data="obj_cat_civ")],
                 [InlineKeyboardButton("⬅️ В меню", callback_data="adm_back")],
             ])
-            await q.edit_message_text("🏢 Выберите категорию объектов:", reply_markup=kb)
+            await safe_edit(q,"🏢 Выберите категорию объектов:", reply_markup=kb)
 
         elif data == "obj_cat_civ":
             await q.edit_message_text("🏠 Гражданское жильё: категория откроется позже.",
@@ -473,7 +484,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             oid = int(data.split("_")[-1])
             o = next((x for x in load_objects() if x["id"] == oid), None)
             if not o:
-                await q.edit_message_text("Объект не найден.", reply_markup=admin_menu(uid))
+                await q.edit_message_text("Объект не найден.", )
                 return
             pic = o.get("cover") or (o.get("photos") or [None])[0]
             if pic:
@@ -483,24 +494,24 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await q.message.reply_text(obj_card(o) + f"\n\n(фото не показ: {e})")
             else:
                 await q.message.reply_text(obj_card(o))
-            await q.edit_message_text(f"Карточка #{oid} — выше.", reply_markup=obj_view_kb(oid))
+            await safe_edit(q,f"Карточка #{oid} — выше.", reply_markup=obj_view_kb(oid))
 
         elif data.startswith("obj_pub_"):
             oid = int(data.split("_")[-1])
             objs = load_objects()
             o = next((x for x in objs if x["id"] == oid), None)
             if not o:
-                await q.edit_message_text("Объект не найден.", reply_markup=admin_menu(uid))
+                await q.edit_message_text("Объект не найден.", )
                 return
             try:
                 await publish_object(context, o)
                 o["published"] = True
                 save_objects(objs)
-                await q.edit_message_text(f"✅ Объект #{oid} опубликован в канале!",
-                                          reply_markup=admin_menu(uid))
+                await safe_edit(q,f"✅ Объект #{oid} опубликован в канале!",
+                                          )
             except Exception as e:
                 traceback.print_exc()
-                await q.edit_message_text(
+                await safe_edit(q,
                     f"❌ Ошибка публикации #{oid}: {e}\n\n(подробности в логах Render)",
                     reply_markup=obj_view_kb(oid))
 
@@ -508,11 +519,11 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             oid = int(data.split("_")[-1])
             objs = [x for x in load_objects() if x["id"] != oid]
             save_objects(objs)
-            await q.edit_message_text(f"🗑 Объект #{oid} удалён.", reply_markup=admin_menu(uid))
+            await q.edit_message_text(f"🗑 Объект #{oid} удалён.", )
 
         elif data.startswith("obj_edit_"):
             oid = int(data.split("_")[-1])
-            await q.edit_message_text(f"✏️ Редактирование объекта #{oid}. Выберите поле:",
+            await safe_edit(q,f"✏️ Редактирование объекта #{oid}. Выберите поле:",
                                       reply_markup=obj_edit_kb(oid))
 
         elif data.startswith("oe_cover_"):
@@ -575,15 +586,15 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if pdf:
                 await q.message.reply_document(io.BytesIO(pdf),
                     filename="kominvest_catalog.pdf", caption="📚 Каталог объектов")
-                await q.edit_message_text("📚 Каталог выше.", reply_markup=admin_menu(uid))
+                await q.edit_message_text("📚 Каталог выше.", )
             else:
-                await q.edit_message_text("Нет объектов для каталога.", reply_markup=admin_menu(uid))
+                await safe_edit(q,"Нет объектов для каталога.", )
 
         elif data == "cat_pub":
-            await q.edit_message_text("⏳ Собираю и отправляю каталог в канал...")
+            await safe_edit(q,"⏳ Собираю и отправляю каталог в канал...")
             pdf = await build_catalog_bytes(context)
             if not pdf:
-                await q.edit_message_text("Нет объектов для каталога.", reply_markup=admin_menu(uid))
+                await q.edit_message_text("Нет объектов для каталога.", )
             else:
                 msg = await context.bot.send_document(CHANNEL_ID,
                     document=io.BytesIO(pdf), filename="kominvest_catalog.pdf",
@@ -593,12 +604,12 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                                        disable_notification=True)
                 except Exception as e:
                     print(f"pin error: {e}")
-                await q.edit_message_text("✅ Каталог отправлен в канал и закреплён.",
-                                          reply_markup=admin_menu(uid))
+                await safe_edit(q,"✅ Каталог отправлен в канал и закреплён.",
+                                          )
 
         elif data == "adm_admins":
             if not is_super(uid):
-                await q.edit_message_text("❌ Только для супер-админа.")
+                await safe_edit(q,"❌ Только для супер-админа.")
                 return
             d = load_admins()
             text = ("👥 Состав админки:\n\n"
@@ -620,12 +631,12 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.edit_message_text("Пришли Telegram ID или @username админа, которого снять:")
 
         elif data == "adm_back":
-            await q.edit_message_text("🛠 Админ-панель КомИнвест:", reply_markup=admin_menu(uid))
+            await q.edit_message_text("🛠 Админ-панель КомИнвест:", )
 
     except Exception as e:
         traceback.print_exc()
         try:
-            await q.edit_message_text(f"⚠️ Ошибка: {e}", reply_markup=admin_menu(uid))
+            await safe_edit(q,f"⚠️ Ошибка: {e}", )
         except Exception:
             pass
 

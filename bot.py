@@ -376,6 +376,17 @@ async def publish_object(context, o):
         await context.bot.send_message(CHANNEL_ID, text=caption,
                                        parse_mode="HTML", reply_markup=kb)
 
+async def safe_edit(q, text, reply_markup=None):
+    try:
+        if reply_markup:
+            await q.edit_message_text(text=text, reply_markup=reply_markup)
+        else:
+            await q.edit_message_text(text=text)
+    except Exception as e:
+        if "Message is not modified" in str(e):
+            pass
+        else:
+            raise e
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     try:

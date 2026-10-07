@@ -388,8 +388,8 @@ async def safe_edit(q, text, reply_markup=None):
         else:
             raise e
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
     q = update.callback_query
-    
     try:
         await q.answer()
         
@@ -409,7 +409,8 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if data == "adm_enter":
             leads_count = len(load_leads())
-            text = f"🔧 Админ-панель КомИнвест:\n\n• Лидов: {leads_count}\n• Объектов: {len(load_objects())}"
+            objs_count = len(load_objects())
+            text = f"🔧 Админ-панель КомИнвест:\n\n• Лидов: {leads_count}\n• Объектов: {objs_count}"
             kb = InlineKeyboardMarkup([
                 [InlineKeyboardButton("📋 Лиды", callback_data="adm_leads"),
                  InlineKeyboardButton("🏢 Объекты", callback_data="adm_objs")],
@@ -428,6 +429,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
                 
             rows = []
+            # Показываем последние 10 лидов
             for l in leads[-10:][::-1]:
                 st = LEAD_STATUSES.get(l.get("status", "new"), "❓")
                 btn_text = f"#{l['id']} {st} | {l['name'][:15]}..."
@@ -539,7 +541,6 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.answer("Произошла внутренняя ошибка.", show_alert=True)
         except:
             pass
-
 
 async def leads_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_user or not is_admin_uid(update.effective_user.id): return

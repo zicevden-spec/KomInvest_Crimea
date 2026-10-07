@@ -69,6 +69,32 @@ def smart_send(text, photo_url=None):
     print(f"📝 Отправляем ТЕКСТОМ (длина {len(text)})")
     return send_message(text)
 
+def sanitize_ai_text(text):
+    """Удаляет Chain-of-Thought и оставляет только пост."""
+    if not text: return ""
+    lines = text.split('\n')
+    start_idx = 0
+    
+    # Ищем начало поста: обычно это строка с * или эмодзи 📈💡
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith('*') or any(emoji in stripped for emoji in ['📈', '🏢', '💡', '⚖️', '📞']):
+            start_idx = i
+            break
+            
+    clean_text = '\n'.join(lines[start_idx:])
+    
+    # Удаляем возможные хвостовые комментарии типа "Total chars..."
+    bad_markers = ["Total chars", "Check rules", "Practical value?", "Forbidden elements"]
+    for marker in bad_markers:
+        if marker in clean_text:
+            cut_pos = clean_text.find(marker)
+            # Отрезаем от маркера до конца строки или следующего абзаца
+            end_pos = clean_text.find('\n\n', cut_pos)
+            if end_pos == -1: end_pos = len(clean_text)
+            clean_text = clean_text[:cut_pos].strip() + "\n\n" + clean_text[end_pos:].strip()
+            
+    return clean_text.strip()
 if __name__ == "__main__":
     post_type, category = get_schedule()
     print(f"📅 Тип: {post_type} | Категория: {category}")

@@ -145,6 +145,36 @@ NEWS_PROMPT = """
 - ЗАПРЕЩЕНО: призывы, @упоминания, ссылки t.me, фразы "пишите юристу", "обсудим". Пост заканчивается на выводе для инвестора.
 """
 
+def strip_cot(text):
+    """Удаляет Chain-of-Thought и оставляет только пост."""
+    lines = text.split('\n')
+    start_idx = 0
+    
+    # Ищем начало поста: первая строка, начинающаяся с эмодзи или заглавной буквы после пустых строк
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        # Пропускаем пустые строки и явные маркеры CoT
+        if not stripped: continue
+        if any(x in stripped.lower() for x in ['let\'s', 'check rules', 'total chars', 'practical value', 'forbidden elements']): continue
+        
+        # Если нашли первую осмысленную строку — это начало поста
+        start_idx = i
+        break
+        
+    clean_text = '\n'.join(lines[start_idx:])
+    
+    # Удаляем возможные хвостовые комментарии типа "Total chars..."
+    bad_markers = ["Total chars", "Check rules", "Practical value?", "Forbidden elements", "One minor adjustment"]
+    for marker in bad_markers:
+        if marker in clean_text:
+            cut_pos = clean_text.find(marker)
+            end_pos = clean_text.find('\n\n', cut_pos)
+            if end_pos == -1: end_pos = len(clean_text)
+            clean_text = clean_text[:cut_pos].strip() + "\n\n" + clean_text[end_pos:].strip()
+            
+    # Убираем лишние пробелы в начале и конце
+    return clean_text.strip()
+
 def call_ai(prompt):
     for model in ["openai/gpt-oss-120b", "qwen/qwen3.6-27b", "google/gemma-2-9b-it:free"]:
         try:

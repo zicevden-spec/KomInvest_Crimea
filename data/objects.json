@@ -1,24 +1,5 @@
 [
   {
-    "id": 1,
-    "category": "commercial",
-    "photos": [
-      "AgACAgIAAxkBAAM-asUIYdPMLL7nCXIJdGUAAasVrcnrAAJTImsbYYMoSnJt55G5qRKbAQADAgADeQADPQQ",
-      "AgACAgIAAxkBAAM_asUIYbAk79jx61dQGiIuPcdzUVoAAlQiaxthgyhKg2VRIR7yWykBAAMCAAN5AAM9BA",
-      "AgACAgIAAxkBAANAasUIYWPtuOXwcuL8AlitI7T2hMAAAlUiaxthgyhKn3puqRR6omABAAMCAAN5AAM9BA"
-    ],
-    "title": "ДЦ \"Город\"",
-    "description": "Коммерческое помещение",
-    "price": "9 526 000 руб. (220 000 руб./м2)",
-    "location": "Симферополь, Желябова ул.",
-    "area": "43,3 м²",
-    "type": "торговый центр",
-    "status": "active",
-    "created": "2026-10-06 14:42",
-    "published": true,
-    "cover": "AgACAgIAAxkBAANeasUcK_tKo2op33uhQoR1aWc1snEAAh4jaxthgyhKjWRg1VFOfbMBAAMCAAN5AAM9BA"
-  },
-  {
     "id": 2,
     "category": "commercial",
     "cover": "AgACAgIAAxkBAAOsasUrbzKLeIHzGNJtArjJGnUbCY0AAngjaxthgyhK0ap0LGHiboQBAAMCAAN5AAM9BA",
